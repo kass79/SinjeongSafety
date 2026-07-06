@@ -8,9 +8,6 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import com.sinjeong.safety.data.Attachment
 import com.sinjeong.safety.data.Post
-import android.net.Uri
-import android.provider.OpenableColumns
-import com.sinjeong.safety.data.Attachment
 import com.sinjeong.safety.data.PostRepository
 import com.sinjeong.safety.data.Tags
 import kotlinx.coroutines.flow.MutableStateFlow
