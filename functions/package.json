@@ -1,0 +1,11 @@
+{
+  "name": "sinjeong-safety-functions",
+  "description": "새 게시물 등록 시 FCM 푸시 발송",
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^6.1.0"
+  },
+  "private": true
+}

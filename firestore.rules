@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /posts/{postId} {
+      // 모든 직원: 로그인 없이 읽기 가능
+      allow read: if true;
+
+      // 글 등록/삭제: 로그인한 관리자만
+      allow create: if request.auth != null && validPost();
+      allow delete: if request.auth != null;
+
+      // 수정: (a) 관리자의 정상 수정  또는  (b) 누구나 views 필드 +1만
+      allow update: if (request.auth != null && validPost())
+                    || onlyViewIncrement();
+
+      function validPost() {
+        return request.resource.data.title is string
+            && request.resource.data.title.size() > 0
+            && request.resource.data.title.size() <= 200
+            && request.resource.data.content is string
+            && request.resource.data.content.size() <= 20000;
+      }
+
+      function onlyViewIncrement() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
+            && request.resource.data.views == resource.data.views + 1;
+      }
+    }
+  }
+}
