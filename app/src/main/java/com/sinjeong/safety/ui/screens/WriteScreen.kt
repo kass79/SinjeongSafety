@@ -39,6 +39,7 @@ import com.sinjeong.safety.ui.theme.AppColors
 /** 작성 화면에서 새로 고른 파일 (업로드 전) */
 private data class PendingFile(val uri: Uri, val name: String, val size: Long, val mime: String) {
     val isImage get() = mime.startsWith("image/")
+    val isVideo get() = mime.startsWith("video/")
 }
 
 fun formatSize(bytes: Long): String = when {
