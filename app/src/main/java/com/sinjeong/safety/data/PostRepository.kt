@@ -95,6 +95,17 @@ class PostRepository {
         postsRef.document(id).update("views", FieldValue.increment(1)).await()
     }
 
+    /** 상단 고정 토글 (관리자만) */
+    suspend fun setPinned(id: String, pinned: Boolean) {
+        auth.currentUser ?: throw IllegalStateException("관리자 로그인이 필요합니다")
+        postsRef.document(id).update("pinned", pinned).await()
+    }
+
+    /** 확인(읽음) 인원 +1 — 로그인 없이 가능 (규칙에서 confirms +1만 허용) */
+    suspend fun confirmRead(id: String) {
+        postsRef.document(id).update("confirms", FieldValue.increment(1)).await()
+    }
+
     suspend fun deletePost(id: String) {
         auth.currentUser ?: throw IllegalStateException("관리자 로그인이 필요합니다")
         postsRef.document(id).delete().await()
