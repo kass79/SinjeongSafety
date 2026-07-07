@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.sinjeong.safety.data.Attachment
+import com.sinjeong.safety.data.LinkAttachment
 import com.sinjeong.safety.data.Post
 import com.sinjeong.safety.data.PostRepository
 import com.sinjeong.safety.data.Tags
@@ -149,6 +150,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         category: String, tag: String, title: String, content: String,
         keptAttachments: List<Attachment>,   // 수정 시 유지할 기존 첨부
         newFileUris: List<Uri>,              // 새로 업로드할 파일들
+        links: List<LinkAttachment> = emptyList(),  // 링크 첨부
         onDone: () -> Unit
     ) {
         if (title.isBlank() || content.isBlank()) {
@@ -161,19 +163,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // 1) 새 파일들 Storage 업로드
                 val uploaded = newFileUris.map { uri ->
                     val (name, size) = fileInfo(uri)
-                    if (size > 20L * 1024 * 1024) {
-                        throw IllegalArgumentException("'$name' — 파일당 최대 20MB까지 첨부할 수 있어요")
+                    val mime = mimeOf(uri)
+                    val isVideo = mime.startsWith("video/")
+                    val limit = if (isVideo) 200L * 1024 * 1024 else 20L * 1024 * 1024
+                    if (size > limit) {
+                        val mb = if (isVideo) "200MB" else "20MB"
+                        throw IllegalArgumentException("'$name' — ${if (isVideo) "동영상은" else "파일당"} 최대 $mb 까지 첨부할 수 있어요")
                     }
-                    repo.uploadAttachment(uri, name, mimeOf(uri), size)
+                    repo.uploadAttachment(uri, name, mime, size)
                 }
                 val attachments = keptAttachments + uploaded
 
                 // 2) Firestore 저장
                 if (editingId == null) {
-                    repo.addPost(category, tag, title, content, attachments)
+                    repo.addPost(category, tag, title, content, attachments, links)
                     _message.value = UiMessage("게시물이 등록되었습니다")
                 } else {
-                    repo.updatePost(editingId, category, tag, title, content, attachments)
+                    repo.updatePost(editingId, category, tag, title, content, attachments, links)
                     _message.value = UiMessage("게시물이 수정되었습니다")
                 }
                 onDone()
