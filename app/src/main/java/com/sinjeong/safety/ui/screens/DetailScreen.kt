@@ -13,6 +13,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,9 +28,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import android.widget.MediaController
+import android.widget.VideoView
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight as FW
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import com.sinjeong.safety.MainViewModel
 import com.sinjeong.safety.data.Attachment
+import com.sinjeong.safety.data.LinkAttachment
 import com.sinjeong.safety.ui.theme.AppColors
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -139,19 +152,31 @@ fun DetailScreen(
                     HorizontalDivider(color = AppColors.Divider)
                     Spacer(Modifier.height(16.dp))
 
-                    Text(
-                        post.content,
-                        fontSize = 16.sp,
-                        lineHeight = 28.sp,
-                        color = AppColors.TextPrimary
-                    )
+                    LinkifiedText(post.content)
 
                     // ── 첨부 이미지 갤러리 ──
                     val images = post.attachments.filter { it.isImage }
-                    val docs = post.attachments.filter { !it.isImage }
+                    val videos = post.attachments.filter { it.isVideo }
+                    val docs = post.attachments.filter { !it.isImage && !it.isVideo }
                     if (images.isNotEmpty()) {
                         Spacer(Modifier.height(16.dp))
                         AttachmentGallery(images)
+                    }
+                    // ── 첨부 동영상 (인앱 재생) ──
+                    if (videos.isNotEmpty()) {
+                        Spacer(Modifier.height(14.dp))
+                        videos.forEach { v ->
+                            VideoPlayer(v)
+                            Spacer(Modifier.height(10.dp))
+                        }
+                    }
+                    // ── 링크 첨부 (유튜브 썸네일 등) ──
+                    if (post.links.isNotEmpty()) {
+                        Spacer(Modifier.height(14.dp))
+                        post.links.forEach { link ->
+                            LinkPreviewCard(link)
+                            Spacer(Modifier.height(10.dp))
+                        }
                     }
                     // ── 첨부 문서 목록 ──
                     if (docs.isNotEmpty()) {
@@ -249,4 +274,148 @@ private fun AttachmentFileRow(doc: Attachment) {
             Text("⬇", fontSize = 16.sp, color = AppColors.Primary)
         }
     }
+}
+
+
+// ── 첨부 동영상 인앱 재생 (탭하면 재생) ─────────────────────────
+@Composable
+private fun VideoPlayer(video: Attachment) {
+    var playing by remember { mutableStateOf(false) }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.Black)
+            .aspectRatio(16f / 9f)
+    ) {
+        if (playing) {
+            AndroidView(
+                factory = { ctx ->
+                    VideoView(ctx).apply {
+                        setVideoURI(Uri.parse(video.url))
+                        setMediaController(MediaController(ctx).also { it.setAnchorView(this) })
+                        setOnPreparedListener { it.start() }
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            // 재생 전: 어두운 배경 + 재생 버튼 + 파일명
+            Box(Modifier.fillMaxSize().clickable { playing = true }, contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.size(56.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.92f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.PlayArrow, "재생", tint = AppColors.Primary, modifier = Modifier.size(30.dp))
+                }
+                Text(
+                    "${video.name} · ${formatSize(video.size)}",
+                    color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(10.dp)
+                )
+            }
+        }
+    }
+}
+
+// ── 링크 미리보기 카드 (유튜브면 썸네일) ───────────────────────
+@Composable
+private fun LinkPreviewCard(link: LinkAttachment) {
+    val context = LocalContext.current
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url))) }
+    ) {
+        if (link.isYoutube) {
+            Column {
+                Box {
+                    AsyncImage(
+                        model = link.thumbnailUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                    )
+                    Box(
+                        Modifier.matchParentSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            Modifier.size(52.dp).clip(CircleShape).background(Color(0xE6E53935)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(30.dp))
+                        }
+                    }
+                }
+                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.PlayCircle, null, tint = Color(0xFFE53935), modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("YouTube에서 열기", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = AppColors.TextPrimary)
+                }
+            }
+        } else {
+            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(AppColors.Primary),
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.Default.Link, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(link.displayHost, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        color = AppColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(link.url, fontSize = 12.sp, color = AppColors.TextSecondary,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Text("↗", fontSize = 16.sp, color = AppColors.Primary)
+            }
+        }
+    }
+}
+
+
+// ── 본문 내 URL 자동 링크 (탭하면 열림) ────────────────────────
+@Composable
+private fun LinkifiedText(text: String) {
+    val context = LocalContext.current
+    val urlRegex = Regex("""https?://[^\s]+""")
+    val matches = urlRegex.findAll(text).toList()
+
+    if (matches.isEmpty()) {
+        Text(text, fontSize = 16.sp, lineHeight = 28.sp, color = AppColors.TextPrimary)
+        return
+    }
+
+    val annotated = buildAnnotatedString {
+        var last = 0
+        for (m in matches) {
+            append(text.substring(last, m.range.first))
+            pushStringAnnotation(tag = "URL", annotation = m.value)
+            withStyle(SpanStyle(color = AppColors.Primary, fontWeight = FW.SemiBold,
+                textDecoration = TextDecoration.Underline)) {
+                append(m.value)
+            }
+            pop()
+            last = m.range.last + 1
+        }
+        if (last < text.length) append(text.substring(last))
+    }
+
+    ClickableText(
+        text = annotated,
+        style = androidx.compose.ui.text.TextStyle(
+            fontSize = 16.sp, lineHeight = 28.sp, color = AppColors.TextPrimary
+        ),
+        onClick = { offset ->
+            annotated.getStringAnnotations("URL", offset, offset).firstOrNull()?.let { ann ->
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ann.item)))
+                }
+            }
+        }
+    )
 }
