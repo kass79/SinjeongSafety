@@ -33,7 +33,6 @@ import com.sinjeong.safety.MainViewModel
 import com.sinjeong.safety.data.Attachment
 import com.sinjeong.safety.data.Categories
 import com.sinjeong.safety.data.LinkAttachment
-import com.sinjeong.safety.data.Tags
 import com.sinjeong.safety.ui.theme.AppColors
 
 /** 작성 화면에서 새로 고른 파일 (업로드 전) */
@@ -70,7 +69,6 @@ fun WriteScreen(
     val isUploading by vm.isUploading.collectAsState()
 
     var category by remember { mutableStateOf(editing?.category ?: Categories.HUMAN_ERROR) }
-    var tag by remember { mutableStateOf(editing?.tag ?: Tags.SAFETY_EDU) }
     var title by remember { mutableStateOf(editing?.title ?: "") }
     var content by remember { mutableStateOf(editing?.content ?: "") }
 
@@ -123,7 +121,7 @@ fun WriteScreen(
                         onClick = {
                             vm.savePost(
                                 editingId = editingPostId,
-                                category = category, tag = tag,
+                                category = category,
                                 title = title, content = content,
                                 keptAttachments = keptAttachments,
                                 newFileUris = newFiles.map { it.uri },
@@ -166,26 +164,6 @@ fun WriteScreen(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Categories.ALL.forEach { c ->
                     SelectChip(text = c, selected = category == c, onClick = { category = c })
-                }
-            }
-
-            Spacer(Modifier.height(20.dp))
-            SectionLabel("세부 태그")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Tags.SELECTABLE.forEach { t ->
-                    val (bg, fg) = tagColors(t)
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = if (tag == t) fg else bg.copy(alpha = 0.5f),
-                        modifier = Modifier.clickable { tag = t }
-                    ) {
-                        Text(
-                            t,
-                            color = if (tag == t) Color.White else fg,
-                            fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                    }
                 }
             }
 
