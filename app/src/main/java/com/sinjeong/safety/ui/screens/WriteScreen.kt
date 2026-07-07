@@ -14,6 +14,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +32,7 @@ import coil.compose.AsyncImage
 import com.sinjeong.safety.MainViewModel
 import com.sinjeong.safety.data.Attachment
 import com.sinjeong.safety.data.Categories
+import com.sinjeong.safety.data.LinkAttachment
 import com.sinjeong.safety.data.Tags
 import com.sinjeong.safety.ui.theme.AppColors
 
@@ -72,8 +76,21 @@ fun WriteScreen(
     // 첨부: 기존 유지분 + 새로 고른 파일
     var keptAttachments by remember { mutableStateOf(editing?.attachments ?: emptyList()) }
     var newFiles by remember { mutableStateOf(listOf<PendingFile>()) }
+    var links by remember { mutableStateOf(editing?.links ?: emptyList()) }
+    var linkInput by remember { mutableStateOf("") }
 
+    // 사진·문서 피커
     val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        val picked = uris.map { uri ->
+            val (name, size) = vm.fileInfo(uri)
+            PendingFile(uri, name, size, vm.mimeOf(uri))
+        }
+        newFiles = newFiles + picked
+    }
+    // 동영상 전용 피커 (video/* 만)
+    val videoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetMultipleContents()
     ) { uris ->
         val picked = uris.map { uri ->
@@ -108,7 +125,8 @@ fun WriteScreen(
                                 category = category, tag = tag,
                                 title = title, content = content,
                                 keptAttachments = keptAttachments,
-                                newFileUris = newFiles.map { it.uri }
+                                newFileUris = newFiles.map { it.uri },
+                                links = links
                             ) { onBack() }
                         },
                         enabled = canSave,
@@ -195,32 +213,49 @@ fun WriteScreen(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 190.dp)
             )
 
-            // ── 파일 첨부 (네이버 밴드 스타일) ──────────────────
+            // ── 파일 · 동영상 첨부 ──────────────────────────────
             Spacer(Modifier.height(20.dp))
-            SectionLabel("파일 첨부")
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White.copy(alpha = 0.6f),
-                border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFC6CEE8)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = !isUploading) { filePicker.launch("*/*") }
-            ) {
-                Row(
-                    Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+            SectionLabel("파일 · 동영상 첨부")
+            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                // 사진/문서
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White.copy(alpha = 0.6f),
+                    border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFC6CEE8)),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(enabled = !isUploading) { filePicker.launch("*/*") }
                 ) {
-                    Icon(Icons.Default.AttachFile, null, tint = AppColors.Primary, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "사진 · PDF · 문서 첨부하기",
-                        color = AppColors.Primary, fontWeight = FontWeight.Bold, fontSize = 14.sp
-                    )
+                    Column(
+                        Modifier.padding(vertical = 14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Default.AttachFile, null, tint = AppColors.Primary, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.height(6.dp))
+                        Text("사진 · 문서", color = AppColors.Primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+                // 동영상
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White.copy(alpha = 0.6f),
+                    border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFC6CEE8)),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(enabled = !isUploading) { videoPicker.launch("video/*") }
+                ) {
+                    Column(
+                        Modifier.padding(vertical = 14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Default.Movie, null, tint = AppColors.Primary, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.height(6.dp))
+                        Text("동영상 (MP4)", color = AppColors.Primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
                 }
             }
             Text(
-                "사진(JPG/PNG), PDF, DOC/DOCX, XLS/XLSX, HWP · 파일당 최대 20MB",
+                "사진·PDF·DOCX·HWP (20MB) · 동영상 MP4 (최대 200MB)",
                 fontSize = 11.sp, color = AppColors.TextSecondary,
                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -233,23 +268,62 @@ fun WriteScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 keptAttachments.forEach { att ->
-                    if (att.isImage) {
-                        ImageThumb(model = att.url) {
-                            keptAttachments = keptAttachments - att
-                        }
-                    } else {
-                        FileChip(name = att.name, size = att.size) {
-                            keptAttachments = keptAttachments - att
-                        }
+                    when {
+                        att.isImage -> ImageThumb(model = att.url) { keptAttachments = keptAttachments - att }
+                        att.isVideo -> VideoChip(name = att.name, size = att.size) { keptAttachments = keptAttachments - att }
+                        else -> FileChip(name = att.name, size = att.size) { keptAttachments = keptAttachments - att }
                     }
                 }
                 newFiles.forEach { pf ->
-                    if (pf.isImage) {
-                        ImageThumb(model = pf.uri) { newFiles = newFiles - pf }
-                    } else {
-                        FileChip(name = pf.name, size = pf.size) { newFiles = newFiles - pf }
+                    when {
+                        pf.isImage -> ImageThumb(model = pf.uri) { newFiles = newFiles - pf }
+                        pf.isVideo -> VideoChip(name = pf.name, size = pf.size) { newFiles = newFiles - pf }
+                        else -> FileChip(name = pf.name, size = pf.size) { newFiles = newFiles - pf }
                     }
                 }
+            }
+
+            // ── 링크 첨부 (유튜브·웹페이지) ──────────────────────
+            Spacer(Modifier.height(20.dp))
+            SectionLabel("링크 첨부")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = linkInput,
+                    onValueChange = { linkInput = it },
+                    singleLine = true,
+                    placeholder = { Text("https:// 주소 붙여넣기", color = AppColors.TextSecondary) },
+                    leadingIcon = { Icon(Icons.Default.Link, null, tint = AppColors.Primary) },
+                    shape = RoundedCornerShape(14.dp),
+                    colors = writeFieldColors(),
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = {
+                        val u = linkInput.trim()
+                        if (u.startsWith("http")) {
+                            links = links + LinkAttachment(url = u, title = "")
+                            linkInput = ""
+                        }
+                    },
+                    enabled = linkInput.trim().startsWith("http"),
+                    colors = ButtonDefaults.buttonColors(containerColor = AppColors.Primary),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp)
+                ) { Text("추가", fontWeight = FontWeight.Bold) }
+            }
+            Text(
+                "유튜브 링크는 카드에 썸네일이 자동으로 표시돼요",
+                fontSize = 11.sp, color = AppColors.TextSecondary,
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(Modifier.height(10.dp))
+            links.forEach { link ->
+                LinkRow(link = link) { links = links - link }
+                Spacer(Modifier.height(8.dp))
             }
 
             Spacer(Modifier.height(60.dp))
@@ -267,6 +341,63 @@ private fun ImageThumb(model: Any, onRemove: () -> Unit) {
             modifier = Modifier.size(84.dp).clip(RoundedCornerShape(14.dp))
         )
         RemoveButton(onRemove, Modifier.align(Alignment.TopEnd))
+    }
+}
+
+// ── 첨부 동영상 썸네일 (재생 아이콘) ────────────────────────────
+@Composable
+private fun VideoChip(name: String, size: Long, onRemove: () -> Unit) {
+    Box {
+        Box(
+            Modifier.size(84.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF1A1C28)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.PlayCircle, null, tint = Color.White, modifier = Modifier.size(30.dp))
+            Text(
+                formatSize(size),
+                color = Color.White, fontSize = 9.sp,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp)
+            )
+        }
+        RemoveButton(onRemove, Modifier.align(Alignment.TopEnd))
+    }
+}
+
+// ── 링크 첨부 행 (유튜브면 ▶ 표시) ─────────────────────────────
+@Composable
+private fun LinkRow(link: LinkAttachment, onRemove: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            Modifier.padding(start = 12.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+                    .background(if (link.isYoutube) Color(0xFFE53935) else AppColors.Primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    if (link.isYoutube) Icons.Default.PlayCircle else Icons.Default.Link,
+                    null, tint = Color.White, modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (link.isYoutube) "YouTube 영상" else link.displayHost,
+                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    color = AppColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+                Text(link.url, fontSize = 11.sp, color = AppColors.TextSecondary,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            RemoveButton(onRemove)
+        }
     }
 }
 
