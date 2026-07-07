@@ -521,8 +521,23 @@ fun PostCard(post: Post, isNew: Boolean, onClick: () -> Unit) {
                     fontSize = 12.sp,
                     color = AppColors.TextSecondary
                 )
+                val hasVideo = post.attachments.any { it.isVideo } || post.links.any { it.isYoutube }
+                if (hasVideo) {
+                    Spacer(Modifier.width(6.dp))
+                    Surface(color = Color(0xFFFDEAEA), shape = RoundedCornerShape(8.dp)) {
+                        Row(
+                            Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.PlayCircle, null,
+                                tint = Color(0xFFE53935), modifier = Modifier.size(12.dp))
+                            Text(" 영상", fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold, color = Color(0xFFE53935))
+                        }
+                    }
+                }
                 if (post.attachments.isNotEmpty()) {
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(6.dp))
                     Surface(color = AppColors.Background, shape = RoundedCornerShape(8.dp)) {
                         Row(
                             Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
