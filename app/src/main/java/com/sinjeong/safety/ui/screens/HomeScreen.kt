@@ -65,10 +65,12 @@ fun Post.isNew(readIds: Set<String>): Boolean {
 }
 
 @Composable
-fun tagColors(tag: String): Pair<Color, Color> = when (tag) {
-    Tags.SAFETY_EDU -> AppColors.TagSafetyBg to AppColors.TagSafetyFg
-    Tags.OPERATION -> AppColors.TagOpsBg to AppColors.TagOpsFg
-    else -> AppColors.TagGeneralBg to AppColors.TagGeneralFg
+fun categoryColors(category: String): Pair<Color, Color> = when (category) {
+    Categories.HUMAN_ERROR -> Color(0xFFFDF0E3) to Color(0xFFF57C00)
+    Categories.EDU_VIDEO -> Color(0xFFE9F1FD) to Color(0xFF1976D2)
+    Categories.REGULATION -> Color(0xFFE9F6ED) to Color(0xFF388E3C)
+    Categories.NOTICE -> Color(0xFFFBF4DC) to Color(0xFFC79A00)
+    else -> AppColors.Background to AppColors.TextSecondary
 }
 
 // ── 홈 화면 ─────────────────────────────────────────────────────
@@ -83,7 +85,6 @@ fun HomeScreen(
     val isLoading by vm.isLoading.collectAsState()
     val isAdmin by vm.isAdmin.collectAsState()
     val selectedCategory by vm.selectedCategory.collectAsState()
-    val selectedTag by vm.selectedTag.collectAsState()
     val searchQuery by vm.searchQuery.collectAsState()
     val readIds by vm.readIds.collectAsState()
     val listState = rememberLazyListState()
@@ -126,13 +127,8 @@ fun HomeScreen(
             item {
                 CategoryRow(
                     selected = selectedCategory,
-                    onToggle = vm::toggleCategory
-                )
-            }
-            item {
-                TagFilterRow(
-                    selected = selectedTag,
-                    onSelect = vm::selectTag
+                    onToggle = vm::toggleCategory,
+                    onSelectAll = vm::selectAll
                 )
             }
 
@@ -340,22 +336,49 @@ private fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
 }
 
 // ── 4개 카테고리 카드 ───────────────────────────────────────────
-private data class CategoryUi(val name: String, val icon: ImageVector, val color: Color)
+private data class CategoryUi(val name: String, val short: String, val icon: ImageVector, val color: Color)
 
 @Composable
-private fun CategoryRow(selected: String?, onToggle: (String) -> Unit) {
+private fun CategoryRow(selected: String?, onToggle: (String) -> Unit, onSelectAll: () -> Unit) {
     val cats = listOf(
-        CategoryUi(Categories.HUMAN_ERROR, Icons.Default.Warning, AppColors.CatOrange),
-        CategoryUi(Categories.EDU_VIDEO, Icons.Default.PlayCircle, AppColors.CatBlue),
-        CategoryUi(Categories.REGULATION, Icons.Default.MenuBook, AppColors.CatGreen),
-        CategoryUi(Categories.NOTICE, Icons.Default.Campaign, AppColors.CatYellow)
+        CategoryUi(Categories.HUMAN_ERROR, "인적오류", Icons.Default.Warning, Color(0xFFF57C00)),
+        CategoryUi(Categories.EDU_VIDEO, "교육영상", Icons.Default.PlayCircle, Color(0xFF1976D2)),
+        CategoryUi(Categories.REGULATION, "운전규정", Icons.Default.MenuBook, Color(0xFF388E3C)),
+        CategoryUi(Categories.NOTICE, "전달사항", Icons.Default.Campaign, Color(0xFFC79A00))
     )
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(horizontal = 16.dp)
+            .height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(9.dp)
     ) {
+        // ── "전체" 세로 pill ──
+        val allSelected = selected == null
+        Surface(
+            shape = RoundedCornerShape(17.dp),
+            color = if (allSelected) AppColors.Primary else Color.White,
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp, if (allSelected) AppColors.Primary else AppColors.Divider
+            ),
+            modifier = Modifier
+                .width(34.dp)
+                .fillMaxHeight()
+                .clickable { onSelectAll() }
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    "전\n체",
+                    color = if (allSelected) Color.White else AppColors.TextSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 15.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+        }
+
         cats.forEach { cat ->
             val isSelected = selected == cat.name
             Surface(
@@ -384,46 +407,15 @@ private fun CategoryRow(selected: String?, onToggle: (String) -> Unit) {
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        cat.name,
+                        cat.short,
                         fontSize = 10.5.sp,
                         lineHeight = 14.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSelected) cat.color else AppColors.TextPrimary,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        maxLines = 2
+                        maxLines = 1
                     )
                 }
-            }
-        }
-    }
-}
-
-// ── 세부 태그 칩 ────────────────────────────────────────────────
-@Composable
-private fun TagFilterRow(selected: String, onSelect: (String) -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Tags.FILTERS.forEach { tag ->
-            val isSelected = tag == selected
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = if (isSelected) AppColors.Primary else Color.White,
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp, if (isSelected) AppColors.Primary else AppColors.Divider
-                ),
-                modifier = Modifier.clickable { onSelect(tag) }
-            ) {
-                Text(
-                    tag,
-                    color = if (isSelected) Color.White else AppColors.TextPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
             }
         }
     }
@@ -434,8 +426,11 @@ private fun TagFilterRow(selected: String, onSelect: (String) -> Unit) {
 fun PostCard(post: Post, isNew: Boolean, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = Color.White,
-        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
+        color = if (post.pinned) Color(0xFFFFFBF4) else Color.White,
+        border = androidx.compose.foundation.BorderStroke(
+            if (post.pinned) 1.5.dp else 1.dp,
+            if (post.pinned) Color(0xFFFFD9A6) else AppColors.Divider
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
@@ -443,10 +438,22 @@ fun PostCard(post: Post, isNew: Boolean, onClick: () -> Unit) {
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val (bg, fg) = tagColors(post.tag)
+                if (post.pinned) {
+                    Surface(color = Color(0xFFFFF0D9), shape = RoundedCornerShape(6.dp)) {
+                        Text(
+                            "📌 고정",
+                            color = Color(0xFFE8890C),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(6.dp))
+                }
+                val (bg, fg) = categoryColors(post.category)
                 Surface(color = bg, shape = RoundedCornerShape(6.dp)) {
                     Text(
-                        post.tag,
+                        Categories.short(post.category),
                         color = fg,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
