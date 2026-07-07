@@ -44,9 +44,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _selectedCategory = MutableStateFlow<String?>(null)   // null = 전체 카테고리
     val selectedCategory: StateFlow<String?> = _selectedCategory.asStateFlow()
 
-    private val _selectedTag = MutableStateFlow(Tags.ALL)
-    val selectedTag: StateFlow<String> = _selectedTag.asStateFlow()
-
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -60,17 +57,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     )
     val readIds: StateFlow<Set<String>> = _readIds.asStateFlow()
 
-    // ── 필터링된 피드 ────────────────────────────────────────────
+    // 확인(읽음) 처리한 게시물 (기기 로컬)
+    private val _confirmedIds = MutableStateFlow(
+        prefs.getStringSet("confirmed_ids", emptySet())?.toSet() ?: emptySet()
+    )
+    val confirmedIds: StateFlow<Set<String>> = _confirmedIds.asStateFlow()
+
+    // ── 필터링된 피드 (핀 고정 우선 + 카테고리/검색) ─────────────
     val filteredPosts: StateFlow<List<Post>> =
-        combine(_posts, _selectedCategory, _selectedTag, _searchQuery) { posts, cat, tag, query ->
+        combine(_posts, _selectedCategory, _searchQuery) { posts, cat, query ->
             posts.asSequence()
                 .filter { cat == null || it.category == cat }
-                .filter { tag == Tags.ALL || it.tag == tag }
                 .filter {
                     query.isBlank() ||
                         it.title.contains(query, ignoreCase = true) ||
                         it.content.contains(query, ignoreCase = true)
                 }
+                .sortedByDescending { it.pinned }   // 고정 글을 항상 위로 (createdAt 정렬은 이미 되어 있음)
                 .toList()
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -91,8 +94,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _selectedCategory.value = if (_selectedCategory.value == category) null else category
     }
 
-    fun selectTag(tag: String) { _selectedTag.value = tag }
+    fun selectAll() { _selectedCategory.value = null }
     fun setSearchQuery(q: String) { _searchQuery.value = q }
+
+    fun isConfirmed(postId: String): Boolean = postId in _confirmedIds.value
+
+    fun confirmRead(postId: String) {
+        if (postId in _confirmedIds.value) return
+        val updated = _confirmedIds.value + postId
+        _confirmedIds.value = updated
+        prefs.edit().putStringSet("confirmed_ids", updated).apply()
+        viewModelScope.launch { runCatching { repo.confirmRead(postId) } }
+    }
+
+    fun togglePin(postId: String, pinned: Boolean) {
+        viewModelScope.launch {
+            try { repo.setPinned(postId, pinned) }
+            catch (e: Exception) { _message.value = UiMessage("고정 변경 실패: ${e.localizedMessage}", true) }
+        }
+    }
 
     fun markRead(postId: String) {
         if (postId in _readIds.value) return
@@ -147,7 +167,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun savePost(
         editingId: String?,
-        category: String, tag: String, title: String, content: String,
+        category: String, title: String, content: String,
         keptAttachments: List<Attachment>,   // 수정 시 유지할 기존 첨부
         newFileUris: List<Uri>,              // 새로 업로드할 파일들
         links: List<LinkAttachment> = emptyList(),  // 링크 첨부
@@ -176,10 +196,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
                 // 2) Firestore 저장
                 if (editingId == null) {
-                    repo.addPost(category, tag, title, content, attachments, links)
+                    repo.addPost(category, "", title, content, attachments, links)
                     _message.value = UiMessage("게시물이 등록되었습니다")
                 } else {
-                    repo.updatePost(editingId, category, tag, title, content, attachments, links)
+                    repo.updatePost(editingId, category, "", title, content, attachments, links)
                     _message.value = UiMessage("게시물이 수정되었습니다")
                 }
                 onDone()
