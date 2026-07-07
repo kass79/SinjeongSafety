@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -72,6 +74,13 @@ fun DetailScreen(
                 },
                 actions = {
                     if (isAdmin && post != null) {
+                        IconButton(onClick = { vm.togglePin(postId, !post.pinned) }) {
+                            Icon(
+                                if (post.pinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                                "고정",
+                                tint = if (post.pinned) Color(0xFFE8890C) else AppColors.TextSecondary
+                            )
+                        }
                         IconButton(onClick = { onEdit(postId) }) {
                             Icon(Icons.Default.Edit, "수정", tint = AppColors.Primary)
                         }
@@ -105,21 +114,21 @@ fun DetailScreen(
             ) {
                 Column(Modifier.padding(22.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        val (bg, fg) = tagColors(post.tag)
+                        if (post.pinned) {
+                            Surface(color = Color(0xFFFFF0D9), shape = RoundedCornerShape(6.dp)) {
+                                Text(
+                                    "📌 고정", color = Color(0xFFE8890C), fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        val (bg, fg) = categoryColors(post.category)
                         Surface(color = bg, shape = RoundedCornerShape(6.dp)) {
                             Text(
-                                post.tag, color = fg, fontSize = 12.sp,
+                                Categories.short(post.category), color = fg, fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Surface(
-                            color = AppColors.Background,
-                            shape = RoundedCornerShape(6.dp)
-                        ) {
-                            Text(
-                                post.category, color = AppColors.TextSecondary, fontSize = 12.sp,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
@@ -185,6 +194,36 @@ fun DetailScreen(
                             AttachmentFileRow(doc)
                             Spacer(Modifier.height(8.dp))
                         }
+                    }
+
+                    // ── 확인(읽음) 버튼 ──
+                    Spacer(Modifier.height(20.dp))
+                    val confirmed = vm.isConfirmed(postId)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(
+                            onClick = { vm.confirmRead(postId) },
+                            enabled = !confirmed,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (confirmed) AppColors.Primary else Color.White,
+                                contentColor = if (confirmed) Color.White else AppColors.Primary,
+                                disabledContainerColor = AppColors.Primary,
+                                disabledContentColor = Color.White
+                            ),
+                            border = if (confirmed) null
+                                else androidx.compose.foundation.BorderStroke(1.5.dp, AppColors.Primary),
+                            shape = RoundedCornerShape(13.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                if (confirmed) "✓ 확인 완료" else "확인했습니다",
+                                fontWeight = FontWeight.Bold, fontSize = 14.sp
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "${post.confirms}명 확인",
+                            fontSize = 12.sp, color = AppColors.TextSecondary
+                        )
                     }
                 }
             }
