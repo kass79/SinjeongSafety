@@ -55,6 +55,8 @@ data class Post(
     val attachments: List<Attachment> = emptyList(),
     val links: List<LinkAttachment> = emptyList(),
     val views: Long = 0,
+    val pinned: Boolean = false,        // 상단 고정
+    val confirms: Long = 0,             // 확인(읽음) 인원 수
     val createdAt: Timestamp? = null,
     val updatedAt: Timestamp? = null
 )
@@ -65,6 +67,12 @@ object Categories {
     const val REGULATION = "운전규정"
     const val NOTICE = "전달사항"
     val ALL = listOf(HUMAN_ERROR, EDU_VIDEO, REGULATION, NOTICE)
+
+    /** 카드/칩에 쓸 짧은 이름 */
+    fun short(category: String): String = when (category) {
+        HUMAN_ERROR -> "인적오류"
+        else -> category
+    }
 }
 
 object Tags {
