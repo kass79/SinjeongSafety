@@ -51,7 +51,8 @@ class PostRepository {
     }
 
     suspend fun addPost(category: String, tag: String, title: String, content: String,
-                        attachments: List<Attachment> = emptyList()) {
+                        attachments: List<Attachment> = emptyList(),
+                        links: List<LinkAttachment> = emptyList()) {
         val user = auth.currentUser ?: throw IllegalStateException("관리자 로그인이 필요합니다")
         val data = hashMapOf(
             "category" to category,
@@ -71,7 +72,8 @@ class PostRepository {
     }
 
     suspend fun updatePost(id: String, category: String, tag: String, title: String, content: String,
-                           attachments: List<Attachment>) {
+                           attachments: List<Attachment>,
+                           links: List<LinkAttachment> = emptyList()) {
         auth.currentUser ?: throw IllegalStateException("관리자 로그인이 필요합니다")
         postsRef.document(id).update(
             mapOf(
@@ -82,6 +84,7 @@ class PostRepository {
                 "attachments" to attachments.map {
                     mapOf("name" to it.name, "url" to it.url, "mimeType" to it.mimeType, "size" to it.size)
                 },
+                "links" to links.map { mapOf("url" to it.url, "title" to it.title) },
                 "updatedAt" to FieldValue.serverTimestamp()
             )
         ).await()
