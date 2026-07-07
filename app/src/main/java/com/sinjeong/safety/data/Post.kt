@@ -16,7 +16,32 @@ data class Attachment(
     val size: Long = 0L
 ) {
     val isImage: Boolean get() = mimeType.startsWith("image/")
+    val isVideo: Boolean get() = mimeType.startsWith("video/")
     val extension: String get() = name.substringAfterLast('.', "").lowercase()
+}
+
+/**
+ * 링크 첨부 (본문과 별개로 붙이는 URL. 유튜브면 썸네일 자동 표시)
+ */
+data class LinkAttachment(
+    val url: String = "",
+    val title: String = ""
+) {
+    /** 유튜브 영상 ID 추출 (없으면 null) */
+    val youtubeId: String? get() {
+        val patterns = listOf(
+            Regex("""youtu\.be/([\w-]{11})"""),
+            Regex("""[?&]v=([\w-]{11})"""),
+            Regex("""youtube\.com/embed/([\w-]{11})""")
+        )
+        for (re in patterns) re.find(url)?.let { return it.groupValues[1] }
+        return null
+    }
+    val isYoutube: Boolean get() = youtubeId != null
+    val thumbnailUrl: String? get() = youtubeId?.let { "https://img.youtube.com/vi/$it/hqdefault.jpg" }
+    val displayHost: String get() = url
+        .removePrefix("https://").removePrefix("http://").removePrefix("www.")
+        .substringBefore("/")
 }
 
 data class Post(
@@ -28,6 +53,7 @@ data class Post(
     val authorName: String = "관리자",
     val authorUid: String = "",
     val attachments: List<Attachment> = emptyList(),
+    val links: List<LinkAttachment> = emptyList(),
     val views: Long = 0,
     val createdAt: Timestamp? = null,
     val updatedAt: Timestamp? = null
