@@ -42,6 +42,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import com.sinjeong.safety.MainViewModel
 import com.sinjeong.safety.data.Attachment
+import com.sinjeong.safety.data.Categories
 import com.sinjeong.safety.data.LinkAttachment
 import com.sinjeong.safety.ui.theme.AppColors
 import java.text.SimpleDateFormat
