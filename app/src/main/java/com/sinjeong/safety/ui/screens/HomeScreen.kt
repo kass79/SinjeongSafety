@@ -24,7 +24,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -199,13 +198,14 @@ private fun HeaderBar(isAdmin: Boolean, onShieldClick: () -> Unit) {
         Image(
             painter = painterResource(R.drawable.mascot_hello),
             contentDescription = "마스코트",
+            contentScale = ContentScale.Crop,
             modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Color.White)
-                .border(1.dp, AppColors.Divider, CircleShape)
+                .size(48.dp)
+                .clip(RoundedCornerShape(15.dp))
+                .background(Color(0xFFE8F0FC))
+                .border(2.dp, Color.White, RoundedCornerShape(15.dp))
         )
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(11.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 "신정승무사업소",
@@ -257,62 +257,14 @@ private fun MascotBanner() {
             .height(112.dp)
             .clip(RoundedCornerShape(20.dp))
     ) {
+        // 배너 이미지에 이미 "슬기로운 승무생활" 문구가 포함되어 있음
         Image(
             painter = painterResource(R.drawable.banner_main),
-            contentDescription = null,
+            contentDescription = "슬기로운 승무생활 - 오늘도 안전운행 출발!",
             contentScale = ContentScale.Crop,
-            alignment = Alignment.CenterStart,
+            alignment = Alignment.Center,
             modifier = Modifier.matchParentSize()
         )
-        // 우측 텍스트 가독성용 그라데이션
-        Box(
-            Modifier
-                .matchParentSize()
-                .background(
-                    Brush.horizontalGradient(
-                        0.32f to Color.Transparent,
-                        0.62f to Color(0x8C101836),
-                        1f to Color(0xD10D132C)
-                    )
-                )
-        )
-        Column(
-            Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 16.dp),
-            horizontalAlignment = Alignment.End
-        ) {
-            Text(
-                "✦ 슬기로운 ✦",
-                color = Color.White.copy(alpha = 0.92f),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.5.sp
-            )
-            Text(
-                "승무생활",
-                color = Color(0xFFFFD54F),
-                fontSize = 27.sp,
-                fontWeight = FontWeight.Black,
-                style = androidx.compose.ui.text.TextStyle(
-                    shadow = androidx.compose.ui.graphics.Shadow(
-                        color = Color(0xFF16265C),
-                        offset = androidx.compose.ui.geometry.Offset(0f, 4f),
-                        blurRadius = 10f
-                    )
-                )
-            )
-            Spacer(Modifier.height(5.dp))
-            Surface(color = Color(0xE63E5BC6), shape = RoundedCornerShape(50)) {
-                Text(
-                    "· 오늘도 안전운행 출발! ·",
-                    color = Color.White,
-                    fontSize = 10.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                )
-            }
-        }
     }
 }
 
