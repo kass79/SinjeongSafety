@@ -79,7 +79,8 @@ fun HomeScreen(
     vm: MainViewModel,
     onPostClick: (Post) -> Unit,
     onLoginClick: () -> Unit,
-    onWriteClick: () -> Unit
+    onWriteClick: () -> Unit,
+    onRegulationClick: () -> Unit
 ) {
     val posts by vm.filteredPosts.collectAsState()
     val isLoading by vm.isLoading.collectAsState()
@@ -127,7 +128,10 @@ fun HomeScreen(
             item {
                 CategoryRow(
                     selected = selectedCategory,
-                    onToggle = vm::toggleCategory,
+                    onToggle = { cat ->
+                        if (cat == Categories.REGULATION) onRegulationClick()
+                        else vm.toggleCategory(cat)
+                    },
                     onSelectAll = vm::selectAll
                 )
             }
