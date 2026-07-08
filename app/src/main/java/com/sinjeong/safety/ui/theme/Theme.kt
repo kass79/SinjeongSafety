@@ -19,6 +19,7 @@ object AppColors {
     val Surface = Color(0xFFFFFFFF)
     val TextPrimary = Color(0xFF1A1C2E)
     val TextSecondary = Color(0xFF7B8194)
+    val TextHint = Color(0xFFA6ABBA)
     val Divider = Color(0xFFE8EBF3)
 
     // 세부 태그 칩 색상
