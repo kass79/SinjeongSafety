@@ -27,6 +27,7 @@ import androidx.navigation.compose.rememberNavController
 import com.sinjeong.safety.ui.screens.DetailScreen
 import com.sinjeong.safety.ui.screens.HomeScreen
 import com.sinjeong.safety.ui.screens.LoginScreen
+import com.sinjeong.safety.ui.screens.RegulationScreen
 import com.sinjeong.safety.ui.screens.WriteScreen
 import com.sinjeong.safety.ui.theme.SinjeongSafetyTheme
 
@@ -36,6 +37,7 @@ object Routes {
     const val WRITE = "write"                 // 새 글
     const val EDIT = "write/{postId}"         // 수정
     const val DETAIL = "detail/{postId}"
+    const val REGULATION = "regulation"
     fun detail(id: String) = "detail/$id"
     fun edit(id: String) = "write/$id"
 }
@@ -81,8 +83,13 @@ class MainActivity : ComponentActivity() {
                                     vm = vm,
                                     onPostClick = { post -> nav.navigate(Routes.detail(post.id)) },
                                     onLoginClick = { nav.navigate(Routes.LOGIN) },
-                                    onWriteClick = { nav.navigate(Routes.WRITE) }
+                                    onWriteClick = { nav.navigate(Routes.WRITE) },
+                                    onRegulationClick = { nav.navigate(Routes.REGULATION) }
                                 )
+                            }
+
+                            composable(Routes.REGULATION) {
+                                RegulationScreen(onBack = { nav.popBackStack() })
                             }
 
                             composable(Routes.LOGIN) {
