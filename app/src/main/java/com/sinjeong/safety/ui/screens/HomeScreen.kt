@@ -10,7 +10,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import android.widget.Toast
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MenuBook
@@ -27,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -228,6 +231,28 @@ private fun HeaderBar(isAdmin: Boolean, onShieldClick: () -> Unit) {
                 )
             }
         }
+        // 달력 아이콘 → 신정승무 캘린더 앱 열기
+        val ctx = LocalContext.current
+        Surface(
+            shape = CircleShape,
+            color = Color.White,
+            border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
+            modifier = Modifier.size(42.dp).clickable {
+                val launch = ctx.packageManager.getLaunchIntentForPackage("com.sinjeong.crewcalendar")
+                if (launch != null) ctx.startActivity(launch)
+                else Toast.makeText(ctx, "신정승무 캘린더 앱이 설치되어 있지 않습니다", Toast.LENGTH_SHORT).show()
+            }
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Filled.CalendarMonth,
+                    contentDescription = "근무 캘린더",
+                    tint = AppColors.Primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
         // 방패 아이콘 → 관리자 로그인 / 로그아웃
         Surface(
             shape = CircleShape,
