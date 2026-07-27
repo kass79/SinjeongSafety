@@ -81,10 +81,10 @@ class PostRepository {
 
     /**
      * 사진을 긴 변 [maxDim] 픽셀로 줄이고 JPEG로 다시 인코딩한다.
-     * - 큰 사진을 통째로 메모리에 올리면 앱이 죽을 수 있어 inSampleSize로 미리 줄여서 읽는다.
-     * - 촬영 방향(EXIF)을 반영하지 않으면 세로 사진이 눕게 되므로 회전을 적용한다.
-     * - 투명 배경(PNG)이 JPEG에서 검게 나오지 않도록 흰 바탕에 그린다.
-     * 실패하면 null을 돌려주고, 호출한 쪽이 원본을 올린다.
+     * 큰 사진을 통째로 메모리에 올리면 앱이 죽을 수 있어 inSampleSize로 미리 줄여 읽고,
+     * 촬영 방향(EXIF)을 반영해 세로 사진이 눕지 않게 하며,
+     * 투명 배경(PNG)이 검게 나오지 않도록 흰 바탕에 그린다.
+     * 실패하면 null을 돌려주고 호출한 쪽이 원본을 올린다.
      */
     private suspend fun shrinkImage(
         context: Context,
@@ -96,7 +96,6 @@ class PostRepository {
         var rotated: Bitmap? = null
         var flattened: Bitmap? = null
         try {
-            // 1) 크기만 먼저 확인
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             context.contentResolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it, null, bounds)
@@ -105,7 +104,6 @@ class PostRepository {
             val oh = bounds.outHeight
             if (ow <= 0 || oh <= 0) return@withContext null
 
-            // 2) 메모리를 아끼려고 2의 배수로 미리 축소해서 읽는다
             var sample = 1
             while (ow / sample > maxDim * 2 || oh / sample > maxDim * 2) sample *= 2
             val opts = BitmapFactory.Options().apply { inSampleSize = sample }
@@ -113,7 +111,6 @@ class PostRepository {
                 BitmapFactory.decodeStream(it, null, opts)
             } ?: return@withContext null
 
-            // 3) 촬영 방향 읽기
             val orientation = try {
                 context.contentResolver.openInputStream(uri)?.use { stream ->
                     ExifInterface(stream).getAttributeInt(
@@ -124,7 +121,6 @@ class PostRepository {
                 ExifInterface.ORIENTATION_NORMAL
             }
 
-            // 4) 축소 + 회전을 한 번에 적용
             val w = source.width
             val h = source.height
             val scale = maxDim.toFloat() / maxOf(w, h)
@@ -137,7 +133,6 @@ class PostRepository {
             }
             rotated = Bitmap.createBitmap(source, 0, 0, w, h, matrix, true)
 
-            // 5) 흰 바탕에 올려 투명 영역이 검게 나오는 것을 막는다
             flattened = Bitmap.createBitmap(rotated.width, rotated.height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(flattened)
             canvas.drawColor(android.graphics.Color.WHITE)
@@ -207,12 +202,22 @@ class PostRepository {
         postsRef.document(id).update("views", FieldValue.increment(1)).await()
     }
 
+    /** 상단 고정 토글 (관리자만) */
+    suspend fun setPinned(id: String, pinned: Boolean) {
+        auth.currentUser ?: throw IllegalStateException("관리자 로그인이 필요합니다")
+        postsRef.document(id).update("pinned", pinned).await()
+    }
+
+    /** 확인(읽음) 인원 +1 — 로그인 없이 가능 (규칙에서 confirms +1만 허용) */
+    suspend fun confirmRead(id: String) {
+        postsRef.document(id).update("confirms", FieldValue.increment(1)).await()
+    }
+
     suspend fun deletePost(id: String) {
         auth.currentUser ?: throw IllegalStateException("관리자 로그인이 필요합니다")
-        // 글을 지우기 전에 첨부 주소를 먼저 확보한다(지운 뒤엔 알 수 없으므로).
+        // 글을 지우기 전에 첨부 주소를 확보한다(지운 뒤엔 알 수 없으므로).
         val urls = attachmentUrlsOf(id)
         postsRef.document(id).delete().await()
-        // 글 삭제가 끝난 뒤 Storage의 사진·영상·문서를 정리한다.
         deleteFiles(urls)
     }
 
@@ -226,16 +231,12 @@ class PostRepository {
         emptyList()
     }
 
-    /**
-     * Storage에서 파일을 지운다.
-     * 이미 지워졌거나 주소가 깨진 파일이 있어도 나머지 삭제를 계속한다.
-     */
+    /** Storage에서 파일을 지운다. 개별 실패는 무시하고 나머지를 계속 지운다. */
     private suspend fun deleteFiles(urls: List<String>) {
         for (url in urls) {
             try {
                 storage.getReferenceFromUrl(url).delete().await()
             } catch (e: Exception) {
-                // 개별 파일 실패는 무시 (글 삭제 자체는 이미 성공했다)
             }
         }
     }
