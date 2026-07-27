@@ -5,7 +5,10 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- 신정승무 캘린더 앱 실행 감지용 — Android 11+ 패키지 가시성 -->
+    <!--
+      안드로이드 11부터는 다른 앱이 깔려 있는지 확인하려면 미리 선언해야 한다.
+      이게 없으면 신정승무캘린더가 설치돼 있어도 "없다"고 판단해 계속 스토어로 보낸다.
+    -->
     <queries>
         <package android:name="com.sinjeong.crewcalendar" />
     </queries>

@@ -5,14 +5,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.widget.Toast
+import com.sinjeong.safety.BuildConfig
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import android.widget.Toast
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MenuBook
@@ -22,6 +25,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material3.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,7 +33,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -169,6 +172,10 @@ fun HomeScreen(
                     )
                 }
             }
+
+            // 목록 끝: 의견 보내기
+            item { FeedbackCard() }
+            item { Spacer(Modifier.height(12.dp)) }
         }
     }
 
@@ -231,28 +238,10 @@ private fun HeaderBar(isAdmin: Boolean, onShieldClick: () -> Unit) {
                 )
             }
         }
-        // 달력 아이콘 → 신정승무 캘린더 앱 열기
-        val ctx = LocalContext.current
-        Surface(
-            shape = CircleShape,
-            color = Color.White,
-            border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
-            modifier = Modifier.size(42.dp).clickable {
-                val launch = ctx.packageManager.getLaunchIntentForPackage("com.sinjeong.crewcalendar")
-                if (launch != null) ctx.startActivity(launch)
-                else Toast.makeText(ctx, "신정승무 캘린더 앱이 설치되어 있지 않습니다", Toast.LENGTH_SHORT).show()
-            }
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Filled.CalendarMonth,
-                    contentDescription = "근무 캘린더",
-                    tint = AppColors.Primary,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
+        // 캘린더 아이콘 → 신정승무캘린더 앱 열기
+        CalendarButton()
         Spacer(Modifier.width(8.dp))
+
         // 방패 아이콘 → 관리자 로그인 / 로그아웃
         Surface(
             shape = CircleShape,
@@ -538,6 +527,144 @@ fun PostCard(post: Post, isNew: Boolean, onClick: () -> Unit) {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+
+/** 개선 의견을 앱 관리자에게 메일로 보낸다. 기기·앱 버전을 함께 담아야 문제 재현이 쉽다. */
+private const val FEEDBACK_EMAIL = "kass7942@gmail.com"
+
+@Composable
+private fun FeedbackCard() {
+    val context = LocalContext.current
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        shadowElevation = 1.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clickable {
+                val body = buildString {
+                    append("\n\n\n───────────────\n")
+                    append("아래 정보는 문제 확인용입니다. 지우지 말아주세요.\n")
+                    append("앱 버전: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n")
+                    append("기기: ${Build.MANUFACTURER} ${Build.MODEL}\n")
+                    append("안드로이드: ${Build.VERSION.RELEASE}\n")
+                }
+                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                    data = Uri.parse("mailto:")
+                    putExtra(Intent.EXTRA_EMAIL, arrayOf(FEEDBACK_EMAIL))
+                    putExtra(Intent.EXTRA_SUBJECT, "[안전앱 의견] ")
+                    putExtra(Intent.EXTRA_TEXT, body)
+                }
+                try {
+                    context.startActivity(Intent.createChooser(intent, "의견 보내기"))
+                } catch (e: Exception) {
+                    Toast.makeText(context, "메일 앱을 찾을 수 없어요", Toast.LENGTH_SHORT).show()
+                }
+            }
+    ) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("\uD83D\uDCAC", fontSize = 18.sp)
+            Spacer(Modifier.width(11.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "의견 보내기",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AppColors.TextPrimary
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "불편한 점이나 있으면 좋겠는 기능을 알려주세요",
+                    fontSize = 11.5.sp,
+                    color = AppColors.TextSecondary
+                )
+            }
+            Text("\u203A", fontSize = 16.sp, color = AppColors.TextSecondary)
+        }
+    }
+}
+
+
+/** 신정승무캘린더 앱의 패키지 이름 (플레이스토어 등록명과 동일해야 한다) */
+private const val CALENDAR_PACKAGE = "com.sinjeong.crewcalendar"
+
+/**
+ * 헤더의 작은 달력 아이콘. 오늘 날짜가 숫자로 보여서 살아 있는 느낌을 준다.
+ * 누르면 신정승무캘린더 앱을 열고, 설치돼 있지 않으면 플레이스토어로 안내한다.
+ */
+@Composable
+private fun CalendarButton() {
+    val context = LocalContext.current
+    val today = remember {
+        java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
+    }
+    Surface(
+        shape = RoundedCornerShape(13.dp),
+        color = Color.White,
+        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
+        modifier = Modifier
+            .size(42.dp)
+            .clickable {
+                val launch = context.packageManager.getLaunchIntentForPackage(CALENDAR_PACKAGE)
+                if (launch != null) {
+                    context.startActivity(launch)
+                } else {
+                    // 아직 안 깔려 있으면 스토어로 (스토어 앱이 없으면 웹으로)
+                    try {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$CALENDAR_PACKAGE"))
+                        )
+                    } catch (e: Exception) {
+                        try {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://play.google.com/store/apps/details?id=$CALENDAR_PACKAGE")
+                                )
+                            )
+                        } catch (e2: Exception) {
+                            Toast.makeText(context, "캘린더 앱을 열 수 없어요", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // 달력 윗부분 빨간 띠와 고리 두 개
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(11.dp)
+                    .background(Color(0xFFF0435F)),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    repeat(2) {
+                        Box(
+                            Modifier
+                                .size(3.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.9f))
+                        )
+                    }
+                }
+            }
+            // 오늘 날짜
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    "$today",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = AppColors.TextPrimary
+                )
             }
         }
     }

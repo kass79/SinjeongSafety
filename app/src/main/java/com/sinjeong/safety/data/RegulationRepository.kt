@@ -150,4 +150,71 @@ object RegulationRepository {
         val dow = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
         return dow == Calendar.SATURDAY || dow == Calendar.SUNDAY
     }
+
+    // ─────────────────────────────────────────────
+    // 즐겨찾기 / 최근 본 조문 (기기 로컬 저장, 서버 불필요)
+    // 저장 형식: "규정집이름|제○조" 를 줄바꿈으로 이어붙임
+    // ─────────────────────────────────────────────
+
+    private const val PREF_NAME = "regulation_prefs"
+    private const val KEY_RECENT = "recent_articles"
+    private const val KEY_FAVORITE = "favorite_articles"
+    private const val RECENT_MAX = 8
+
+    private fun prefs(context: Context) =
+        context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+
+    private fun keyOf(book: String, num: String) = "$book|$num"
+
+    private fun readKeys(context: Context, key: String): List<String> =
+        prefs(context).getString(key, "")
+            ?.split("\n")
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
+
+    private fun writeKeys(context: Context, key: String, list: List<String>) {
+        prefs(context).edit().putString(key, list.joinToString("\n")).apply()
+    }
+
+    /** 조문을 열 때 호출. 최근 목록 맨 앞으로 올리고 중복 제거. */
+    fun addRecent(context: Context, book: String, num: String) {
+        val k = keyOf(book, num)
+        val updated = (listOf(k) + readKeys(context, KEY_RECENT).filter { it != k }).take(RECENT_MAX)
+        writeKeys(context, KEY_RECENT, updated)
+    }
+
+    fun isFavorite(context: Context, book: String, num: String): Boolean =
+        readKeys(context, KEY_FAVORITE).contains(keyOf(book, num))
+
+    /** 별표 토글. 토글 후 즐겨찾기 상태를 반환. */
+    fun toggleFavorite(context: Context, book: String, num: String): Boolean {
+        val k = keyOf(book, num)
+        val cur = readKeys(context, KEY_FAVORITE)
+        return if (cur.contains(k)) {
+            writeKeys(context, KEY_FAVORITE, cur.filter { it != k })
+            false
+        } else {
+            writeKeys(context, KEY_FAVORITE, listOf(k) + cur)
+            true
+        }
+    }
+
+    /** 저장된 키를 실제 조문으로 되살린다. 삭제·개정으로 못 찾는 항목은 조용히 건너뛴다. */
+    private suspend fun resolve(context: Context, keys: List<String>): List<Pair<String, RegArticle>> {
+        if (keys.isEmpty()) return emptyList()
+        val books = loadBooks(context)
+        return keys.mapNotNull { k ->
+            val parts = k.split("|")
+            if (parts.size != 2) return@mapNotNull null
+            val book = books.firstOrNull { it.name == parts[0] } ?: return@mapNotNull null
+            val article = book.articles.firstOrNull { it.num == parts[1] } ?: return@mapNotNull null
+            book.name to article
+        }
+    }
+
+    suspend fun getRecentArticles(context: Context): List<Pair<String, RegArticle>> =
+        resolve(context, readKeys(context, KEY_RECENT))
+
+    suspend fun getFavoriteArticles(context: Context): List<Pair<String, RegArticle>> =
+        resolve(context, readKeys(context, KEY_FAVORITE))
 }

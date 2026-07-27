@@ -6,7 +6,17 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
+import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -41,13 +51,110 @@ class PostRepository {
     }
 
     /** 파일 1개 업로드 → 다운로드 URL이 담긴 Attachment 반환 */
-    suspend fun uploadAttachment(uri: Uri, name: String, mimeType: String, size: Long): Attachment {
+    suspend fun uploadAttachment(
+        context: Context,
+        uri: Uri,
+        name: String,
+        mimeType: String,
+        size: Long
+    ): Attachment {
         auth.currentUser ?: throw IllegalStateException("관리자 로그인이 필요합니다")
         val safeName = name.replace(Regex("[/\\#?%*:|\"<>]"), "_")
         val ref = storage.reference.child("attachments/${System.currentTimeMillis()}_$safeName")
-        ref.putFile(uri).await()
-        val url = ref.downloadUrl.await().toString()
-        return Attachment(name = name, url = url, mimeType = mimeType, size = size)
+
+        // 사진은 올리기 전에 줄인다. 게시판에서 보는 데는 원본 화질이 필요 없고,
+        // 요즘 폰 사진은 한 장에 3~5MB라 용량과 업로드 시간을 크게 잡아먹는다.
+        val shrunk = if (mimeType.startsWith("image/")) shrinkImage(context, uri) else null
+
+        return if (shrunk != null && shrunk.size < size) {
+            val meta = StorageMetadata.Builder().setContentType("image/jpeg").build()
+            ref.putBytes(shrunk, meta).await()
+            val url = ref.downloadUrl.await().toString()
+            Attachment(name = name, url = url, mimeType = "image/jpeg", size = shrunk.size.toLong())
+        } else {
+            // 압축에 실패했거나 오히려 커진 경우엔 원본을 그대로 올린다.
+            ref.putFile(uri).await()
+            val url = ref.downloadUrl.await().toString()
+            Attachment(name = name, url = url, mimeType = mimeType, size = size)
+        }
+    }
+
+    /**
+     * 사진을 긴 변 [maxDim] 픽셀로 줄이고 JPEG로 다시 인코딩한다.
+     * - 큰 사진을 통째로 메모리에 올리면 앱이 죽을 수 있어 inSampleSize로 미리 줄여서 읽는다.
+     * - 촬영 방향(EXIF)을 반영하지 않으면 세로 사진이 눕게 되므로 회전을 적용한다.
+     * - 투명 배경(PNG)이 JPEG에서 검게 나오지 않도록 흰 바탕에 그린다.
+     * 실패하면 null을 돌려주고, 호출한 쪽이 원본을 올린다.
+     */
+    private suspend fun shrinkImage(
+        context: Context,
+        uri: Uri,
+        maxDim: Int = 1600,
+        quality: Int = 82
+    ): ByteArray? = withContext(Dispatchers.IO) {
+        var source: Bitmap? = null
+        var rotated: Bitmap? = null
+        var flattened: Bitmap? = null
+        try {
+            // 1) 크기만 먼저 확인
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            context.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, bounds)
+            }
+            val ow = bounds.outWidth
+            val oh = bounds.outHeight
+            if (ow <= 0 || oh <= 0) return@withContext null
+
+            // 2) 메모리를 아끼려고 2의 배수로 미리 축소해서 읽는다
+            var sample = 1
+            while (ow / sample > maxDim * 2 || oh / sample > maxDim * 2) sample *= 2
+            val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+            source = context.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, opts)
+            } ?: return@withContext null
+
+            // 3) 촬영 방향 읽기
+            val orientation = try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    ExifInterface(stream).getAttributeInt(
+                        ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
+                    )
+                } ?: ExifInterface.ORIENTATION_NORMAL
+            } catch (e: Exception) {
+                ExifInterface.ORIENTATION_NORMAL
+            }
+
+            // 4) 축소 + 회전을 한 번에 적용
+            val w = source.width
+            val h = source.height
+            val scale = maxDim.toFloat() / maxOf(w, h)
+            val matrix = Matrix()
+            if (scale < 1f) matrix.postScale(scale, scale)
+            when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+                ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+                ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            }
+            rotated = Bitmap.createBitmap(source, 0, 0, w, h, matrix, true)
+
+            // 5) 흰 바탕에 올려 투명 영역이 검게 나오는 것을 막는다
+            flattened = Bitmap.createBitmap(rotated.width, rotated.height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(flattened)
+            canvas.drawColor(android.graphics.Color.WHITE)
+            canvas.drawBitmap(rotated, 0f, 0f, null)
+
+            val out = ByteArrayOutputStream()
+            flattened.compress(Bitmap.CompressFormat.JPEG, quality, out)
+            out.toByteArray()
+        } catch (e: Exception) {
+            null
+        } catch (e: OutOfMemoryError) {
+            null
+        } finally {
+            flattened?.recycle()
+            if (rotated !== source) rotated?.recycle()
+            source?.recycle()
+        }
     }
 
     suspend fun addPost(category: String, tag: String, title: String, content: String,
@@ -75,6 +182,8 @@ class PostRepository {
                            attachments: List<Attachment>,
                            links: List<LinkAttachment> = emptyList()) {
         auth.currentUser ?: throw IllegalStateException("관리자 로그인이 필요합니다")
+        // 수정 전 첨부 목록을 기억해 둔다(빠진 파일을 나중에 정리하기 위해).
+        val beforeUrls = attachmentUrlsOf(id)
         postsRef.document(id).update(
             mapOf(
                 "category" to category,
@@ -88,6 +197,9 @@ class PostRepository {
                 "updatedAt" to FieldValue.serverTimestamp()
             )
         ).await()
+        // 관리자가 첨부를 빼고 저장한 경우, 더 이상 쓰이지 않는 파일을 지운다.
+        val keep = attachments.map { it.url }.toSet()
+        deleteFiles(beforeUrls.filter { it !in keep })
     }
 
     /** 조회수 +1 (로그인 없이도 가능 — 보안 규칙에서 views 필드 +1만 허용) */
@@ -95,20 +207,37 @@ class PostRepository {
         postsRef.document(id).update("views", FieldValue.increment(1)).await()
     }
 
-    /** 상단 고정 토글 (관리자만) */
-    suspend fun setPinned(id: String, pinned: Boolean) {
-        auth.currentUser ?: throw IllegalStateException("관리자 로그인이 필요합니다")
-        postsRef.document(id).update("pinned", pinned).await()
-    }
-
-    /** 확인(읽음) 인원 +1 — 로그인 없이 가능 (규칙에서 confirms +1만 허용) */
-    suspend fun confirmRead(id: String) {
-        postsRef.document(id).update("confirms", FieldValue.increment(1)).await()
-    }
-
     suspend fun deletePost(id: String) {
         auth.currentUser ?: throw IllegalStateException("관리자 로그인이 필요합니다")
+        // 글을 지우기 전에 첨부 주소를 먼저 확보한다(지운 뒤엔 알 수 없으므로).
+        val urls = attachmentUrlsOf(id)
         postsRef.document(id).delete().await()
+        // 글 삭제가 끝난 뒤 Storage의 사진·영상·문서를 정리한다.
+        deleteFiles(urls)
+    }
+
+    /** 해당 글에 첨부된 파일들의 다운로드 주소. 조회 실패 시 빈 목록. */
+    private suspend fun attachmentUrlsOf(id: String): List<String> = try {
+        val snap = postsRef.document(id).get().await()
+        @Suppress("UNCHECKED_CAST")
+        val list = snap.get("attachments") as? List<Map<String, Any?>> ?: emptyList()
+        list.mapNotNull { it["url"] as? String }.filter { it.isNotBlank() }
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    /**
+     * Storage에서 파일을 지운다.
+     * 이미 지워졌거나 주소가 깨진 파일이 있어도 나머지 삭제를 계속한다.
+     */
+    private suspend fun deleteFiles(urls: List<String>) {
+        for (url in urls) {
+            try {
+                storage.getReferenceFromUrl(url).delete().await()
+            } catch (e: Exception) {
+                // 개별 파일 실패는 무시 (글 삭제 자체는 이미 성공했다)
+            }
+        }
     }
 
     // ── 관리자 인증 ──────────────────────────────────────────────
