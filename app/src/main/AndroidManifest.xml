@@ -15,8 +15,8 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@drawable/mascot_hello"
-        android:roundIcon="@drawable/mascot_hello"
+        android:icon="@drawable/mascot_sign"
+        android:roundIcon="@drawable/mascot_sign"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.SinjeongSafety">

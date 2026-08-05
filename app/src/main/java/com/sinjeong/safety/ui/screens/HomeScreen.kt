@@ -603,15 +603,14 @@ private const val CALENDAR_PACKAGE = "com.sinjeong.crewcalendar"
 @Composable
 private fun CalendarButton() {
     val context = LocalContext.current
-    val today = remember {
-        java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
-    }
-    Surface(
-        shape = RoundedCornerShape(13.dp),
-        color = Color.White,
-        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
+    // 신정승무캘린더의 실제 앱 아이콘을 그대로 보여준다.
+    // 두 앱이 형제 앱임을 한눈에 알 수 있고, 누르면 그 앱이 열린다는 것도 직관적이다.
+    Image(
+        painter = painterResource(R.drawable.icon_crewcalendar),
+        contentDescription = "신정승무캘린더 열기",
         modifier = Modifier
             .size(42.dp)
+            .clip(RoundedCornerShape(11.dp))
             .clickable {
                 val launch = context.packageManager.getLaunchIntentForPackage(CALENDAR_PACKAGE)
                 if (launch != null) {
@@ -636,36 +635,5 @@ private fun CalendarButton() {
                     }
                 }
             }
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // 달력 윗부분 빨간 띠와 고리 두 개
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(11.dp)
-                    .background(Color(0xFFF0435F)),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    repeat(2) {
-                        Box(
-                            Modifier
-                                .size(3.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.9f))
-                        )
-                    }
-                }
-            }
-            // 오늘 날짜
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    "$today",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = AppColors.TextPrimary
-                )
-            }
-        }
-    }
+    )
 }
