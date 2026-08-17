@@ -91,6 +91,8 @@ fun HomeScreen(
     onRegulationClick: () -> Unit
 ) {
     val posts by vm.filteredPosts.collectAsState()
+    // 아카이브 목록도 여기서 구독한다. LazyColumn 안에서는 collectAsState를 쓸 수 없다.
+    val archiveYears by vm.archive.collectAsState()
     val isLoading by vm.isLoading.collectAsState()
     val isAdmin by vm.isAdmin.collectAsState()
     val selectedCategory by vm.selectedCategory.collectAsState()
@@ -171,8 +173,7 @@ fun HomeScreen(
                 }
             } else if (showArchive) {
                 // 지난 자료: 연도 ▸ 월 접기 목록
-                val years = vm.archive.collectAsState().value
-                items(years, key = { it.year }) { y ->
+                items(archiveYears, key = { it.year }) { y ->
                     ArchiveYearBlock(
                         year = y,
                         expandedKeys = expandedKeys,
