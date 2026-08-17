@@ -154,7 +154,8 @@ class PostRepository {
 
     suspend fun addPost(category: String, tag: String, title: String, content: String,
                         attachments: List<Attachment> = emptyList(),
-                        links: List<LinkAttachment> = emptyList()) {
+                        links: List<LinkAttachment> = emptyList(),
+                        docDate: Timestamp? = null) {
         val user = auth.currentUser ?: throw IllegalStateException("관리자 로그인이 필요합니다")
         val data = hashMapOf(
             "category" to category,
@@ -170,12 +171,15 @@ class PostRepository {
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp()
         )
+        // 자료 날짜를 지정한 경우에만 저장한다. 없으면 올린 시각이 기준이 된다.
+        if (docDate != null) data["docDate"] = docDate
         postsRef.add(data).await()
     }
 
     suspend fun updatePost(id: String, category: String, tag: String, title: String, content: String,
                            attachments: List<Attachment>,
-                           links: List<LinkAttachment> = emptyList()) {
+                           links: List<LinkAttachment> = emptyList(),
+                           docDate: Timestamp? = null) {
         auth.currentUser ?: throw IllegalStateException("관리자 로그인이 필요합니다")
         // 수정 전 첨부 목록을 기억해 둔다(빠진 파일을 나중에 정리하기 위해).
         val beforeUrls = attachmentUrlsOf(id)
@@ -190,7 +194,7 @@ class PostRepository {
                 },
                 "links" to links.map { mapOf("url" to it.url, "title" to it.title) },
                 "updatedAt" to FieldValue.serverTimestamp()
-            )
+            ) + (if (docDate != null) mapOf("docDate" to docDate) else emptyMap())
         ).await()
         // 관리자가 첨부를 빼고 저장한 경우, 더 이상 쓰이지 않는 파일을 지운다.
         val keep = attachments.map { it.url }.toSet()

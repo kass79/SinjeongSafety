@@ -9,12 +9,14 @@ import android.provider.OpenableColumns
 import com.sinjeong.safety.data.Attachment
 import com.sinjeong.safety.data.LinkAttachment
 import com.sinjeong.safety.data.Post
+import com.sinjeong.safety.data.effectiveDate
 import com.sinjeong.safety.data.PostRepository
 import com.sinjeong.safety.data.Tags
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
@@ -73,8 +75,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         it.title.contains(query, ignoreCase = true) ||
                         it.content.contains(query, ignoreCase = true)
                 }
-                .sortedByDescending { it.pinned }   // 고정 글을 항상 위로 (createdAt 정렬은 이미 되어 있음)
+                // 고정 글을 맨 위로, 그 다음은 '자료 날짜' 순.
+                // 서버 쿼리는 createdAt(올린 시각) 순이므로 여기서 다시 정렬한다.
+                // 쿼리를 docDate 순으로 바꾸면 그 값이 없는 예전 글이 아예 빠지므로 그렇게 하지 않는다.
+                .sortedWith(
+                    compareByDescending<Post> { it.pinned }
+                        .thenByDescending { it.effectiveDate?.toDate()?.time ?: 0L }
+                )
                 .toList()
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    // ── 지난 자료 아카이브 (연도 → 월 묶음) ──────────────────
+    data class ArchiveMonth(val month: Int, val posts: List<Post>)
+    data class ArchiveYear(val year: Int, val total: Int, val months: List<ArchiveMonth>)
+
+    val archive: StateFlow<List<ArchiveYear>> =
+        filteredPosts.map { posts ->
+            val cal = java.util.Calendar.getInstance()
+            posts.mapNotNull { post ->
+                val d = post.effectiveDate?.toDate() ?: return@mapNotNull null
+                cal.time = d
+                Triple(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1, post)
+            }
+            .groupBy { it.first }                     // 연도별
+            .toSortedMap(reverseOrder())              // 최신 연도부터
+            .map { (year, rows) ->
+                val months = rows.groupBy { it.second }
+                    .toSortedMap(reverseOrder())      // 최신 월부터
+                    .map { (m, list) -> ArchiveMonth(m, list.map { it.third }) }
+                ArchiveYear(year, rows.size, months)
+            }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
@@ -171,6 +201,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         keptAttachments: List<Attachment>,   // 수정 시 유지할 기존 첨부
         newFileUris: List<Uri>,              // 새로 업로드할 파일들
         links: List<LinkAttachment> = emptyList(),  // 링크 첨부
+        docDate: com.google.firebase.Timestamp? = null,  // 자료 날짜(과거 자료 정리용)
         onDone: () -> Unit
     ) {
         if (title.isBlank() || content.isBlank()) {
@@ -211,10 +242,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
                 // 2) Firestore 저장
                 if (editingId == null) {
-                    repo.addPost(category, "", title, content, attachments, links)
+                    repo.addPost(category, "", title, content, attachments, links, docDate)
                     _message.value = UiMessage("게시물이 등록되었습니다")
                 } else {
-                    repo.updatePost(editingId, category, "", title, content, attachments, links)
+                    repo.updatePost(editingId, category, "", title, content, attachments, links, docDate)
                     _message.value = UiMessage("게시물이 수정되었습니다")
                 }
                 onDone()

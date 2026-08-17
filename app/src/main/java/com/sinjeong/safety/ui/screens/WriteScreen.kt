@@ -1,8 +1,10 @@
 package com.sinjeong.safety.ui.screens
 
+import android.app.DatePickerDialog
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,10 +32,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.sinjeong.safety.MainViewModel
+import androidx.compose.ui.platform.LocalContext
+import com.google.firebase.Timestamp
 import com.sinjeong.safety.data.Attachment
 import com.sinjeong.safety.data.Categories
 import com.sinjeong.safety.data.LinkAttachment
 import com.sinjeong.safety.ui.theme.AppColors
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 /** 작성 화면에서 새로 고른 파일 (업로드 전) */
 private data class PendingFile(val uri: Uri, val name: String, val size: Long, val mime: String) {
@@ -69,6 +75,16 @@ fun WriteScreen(
     val isUploading by vm.isUploading.collectAsState()
 
     var category by remember { mutableStateOf(editing?.category ?: Categories.HUMAN_ERROR) }
+    // 자료 날짜 — 과거 자료를 올릴 때 실제 날짜로 바꾼다. 기본값은 오늘.
+    var docCal by remember {
+        mutableStateOf(
+            java.util.Calendar.getInstance().apply {
+                // 예전 글에는 docDate가 없다. 그때는 올린 시각을 써야
+                // 수정만 했는데 날짜가 오늘로 바뀌어 맨 위로 올라오는 일이 없다.
+                (editing?.docDate ?: editing?.createdAt)?.toDate()?.let { time = it }
+            }
+        )
+    }
     var title by remember { mutableStateOf(editing?.title ?: "") }
     var content by remember { mutableStateOf(editing?.content ?: "") }
 
@@ -125,7 +141,8 @@ fun WriteScreen(
                                 title = title, content = content,
                                 keptAttachments = keptAttachments,
                                 newFileUris = newFiles.map { it.uri },
-                                links = links
+                                links = links,
+                                docDate = Timestamp(docCal.time)
                             ) { onBack() }
                         },
                         enabled = canSave,
@@ -166,6 +183,49 @@ fun WriteScreen(
                     SelectChip(text = c, selected = category == c, onClick = { category = c })
                 }
             }
+
+            Spacer(Modifier.height(20.dp))
+            SectionLabel("자료 날짜")
+            val context = LocalContext.current
+            val dateText = SimpleDateFormat("yyyy년 M월 d일", Locale.KOREA).format(docCal.time)
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
+                border = BorderStroke(1.dp, AppColors.Divider),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !isUploading) {
+                        DatePickerDialog(
+                            context,
+                            { _, y, m, d ->
+                                docCal = (docCal.clone() as java.util.Calendar).apply {
+                                    set(java.util.Calendar.YEAR, y)
+                                    set(java.util.Calendar.MONTH, m)
+                                    set(java.util.Calendar.DAY_OF_MONTH, d)
+                                }
+                            },
+                            docCal.get(java.util.Calendar.YEAR),
+                            docCal.get(java.util.Calendar.MONTH),
+                            docCal.get(java.util.Calendar.DAY_OF_MONTH)
+                        ).show()
+                    }
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("\uD83D\uDCC5", fontSize = 15.sp)
+                    Spacer(Modifier.width(9.dp))
+                    Text(dateText, fontSize = 14.sp, color = AppColors.TextPrimary,
+                        modifier = Modifier.weight(1f))
+                    Text("변경", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AppColors.Primary)
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "지난 자료를 올릴 때는 그 자료의 실제 날짜로 바꿔주세요. 최신 공지가 밀리지 않습니다.",
+                fontSize = 11.5.sp, color = AppColors.TextSecondary, lineHeight = 16.sp
+            )
 
             Spacer(Modifier.height(20.dp))
             SectionLabel("제목")

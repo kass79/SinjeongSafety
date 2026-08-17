@@ -58,8 +58,18 @@ data class Post(
     val pinned: Boolean = false,        // 상단 고정
     val confirms: Long = 0,             // 확인(읽음) 인원 수
     val createdAt: Timestamp? = null,
-    val updatedAt: Timestamp? = null
+    val updatedAt: Timestamp? = null,
+    /**
+     * 자료 날짜. 관리자가 지정하는 "그 자료가 만들어진 날"이다.
+     * 올린 시각(createdAt)과 구분해야, 과거 자료를 나중에 올려도
+     * 피드 맨 위로 튀어나오지 않는다. 예전 글에는 이 값이 없다.
+     */
+    val docDate: Timestamp? = null
 )
+
+/** 정렬·표시에 쓰는 기준 날짜. 자료 날짜가 없으면 올린 시각으로 대체한다. */
+val Post.effectiveDate: Timestamp?
+    get() = docDate ?: createdAt
 
 object Categories {
     const val HUMAN_ERROR = "인적오류 주의개소"

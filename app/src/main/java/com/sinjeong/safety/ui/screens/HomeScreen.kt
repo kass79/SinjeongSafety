@@ -44,6 +44,7 @@ import com.sinjeong.safety.MainViewModel
 import com.sinjeong.safety.R
 import com.sinjeong.safety.data.Categories
 import com.sinjeong.safety.data.Post
+import com.sinjeong.safety.data.effectiveDate
 import com.sinjeong.safety.data.Tags
 import com.sinjeong.safety.ui.theme.AppColors
 import com.google.firebase.Timestamp
@@ -64,8 +65,10 @@ fun Timestamp?.toRelative(): String {
 }
 
 fun Post.isNew(readIds: Set<String>): Boolean {
-    val created = createdAt?.toDate()?.time ?: return false
-    val within3Days = System.currentTimeMillis() - created < 3L * 24 * 60 * 60 * 1000
+    // 올린 시각이 아니라 '자료 날짜'로 판단한다.
+    // 과거 자료를 오늘 올려도 NEW가 붙어 최신 공지를 밀어내지 않도록.
+    val base = effectiveDate?.toDate()?.time ?: return false
+    val within3Days = System.currentTimeMillis() - base < 3L * 24 * 60 * 60 * 1000
     return within3Days && id !in readIds
 }
 
@@ -95,6 +98,9 @@ fun HomeScreen(
     val readIds by vm.readIds.collectAsState()
     val listState = rememberLazyListState()
     var showLogoutDialog by remember { mutableStateOf(false) }
+    // 지난 자료 보기 모드 · 펼친 '연도-월' 키 목록
+    var showArchive by remember { mutableStateOf(false) }
+    var expandedKeys by remember { mutableStateOf(setOf<String>()) }
 
     Scaffold(
         containerColor = AppColors.Background,
@@ -163,6 +169,20 @@ fun HomeScreen(
                         }
                     }
                 }
+            } else if (showArchive) {
+                // 지난 자료: 연도 ▸ 월 접기 목록
+                val years = vm.archive.collectAsState().value
+                items(years, key = { it.year }) { y ->
+                    ArchiveYearBlock(
+                        year = y,
+                        expandedKeys = expandedKeys,
+                        onToggle = { k ->
+                            expandedKeys = if (k in expandedKeys) expandedKeys - k else expandedKeys + k
+                        },
+                        readIds = readIds,
+                        onPostClick = onPostClick
+                    )
+                }
             } else {
                 items(posts, key = { it.id }) { post ->
                     PostCard(
@@ -171,6 +191,14 @@ fun HomeScreen(
                         onClick = { onPostClick(post) }
                     )
                 }
+            }
+
+            // 지난 자료 보기 전환
+            item {
+                ArchiveToggle(
+                    showArchive = showArchive,
+                    onToggle = { showArchive = !showArchive }
+                )
             }
 
             // 목록 끝: 의견 보내기
@@ -636,4 +664,157 @@ private fun CalendarButton() {
                 }
             }
     )
+}
+
+
+/** 피드 ↔ 지난 자료 전환 버튼 */
+@Composable
+private fun ArchiveToggle(showArchive: Boolean, onToggle: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = if (showArchive) AppColors.Primary else Color.White,
+        shadowElevation = 1.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clickable(onClick = onToggle)
+    ) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(if (showArchive) "\uD83D\uDCC2" else "\uD83D\uDCC1", fontSize = 17.sp)
+            Spacer(Modifier.width(11.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (showArchive) "최신 공지로 돌아가기" else "지난 자료 보기",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (showArchive) Color.White else AppColors.TextPrimary
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    if (showArchive) "연도·월별로 정리된 목록을 보고 있어요"
+                    else "연도와 월로 묶어서 지난 자료를 찾아봐요",
+                    fontSize = 11.5.sp,
+                    color = if (showArchive) Color.White.copy(alpha = 0.85f) else AppColors.TextSecondary
+                )
+            }
+            Text(
+                if (showArchive) "\u2715" else "\u203A",
+                fontSize = 16.sp,
+                color = if (showArchive) Color.White else AppColors.TextSecondary
+            )
+        }
+    }
+}
+
+/** 아카이브 한 해 블록: 2026년 ▸ 3월(12건) 형태로 접었다 펼친다 */
+@Composable
+private fun ArchiveYearBlock(
+    year: MainViewModel.ArchiveYear,
+    expandedKeys: Set<String>,
+    onToggle: (String) -> Unit,
+    readIds: Set<String>,
+    onPostClick: (Post) -> Unit
+) {
+    Column(Modifier.padding(horizontal = 16.dp)) {
+        // 연도 헤더
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { onToggle("y${'$'}{year.year}") }
+                .padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                if ("y${'$'}{year.year}" in expandedKeys) "\u25BE" else "\u25B8",
+                fontSize = 13.sp, color = AppColors.Primary
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "${'$'}{year.year}년",
+                fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = AppColors.TextPrimary
+            )
+            Spacer(Modifier.width(7.dp))
+            Text("${'$'}{year.total}건", fontSize = 12.sp, color = AppColors.TextHint)
+        }
+        if ("y${'$'}{year.year}" in expandedKeys) {
+            year.months.forEach { m ->
+                val key = "m${'$'}{year.year}-${'$'}{m.month}"
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onToggle(key) }
+                        .padding(start = 20.dp, top = 9.dp, bottom = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        if (key in expandedKeys) "\u25BE" else "\u25B8",
+                        fontSize = 12.sp, color = AppColors.TextSecondary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "${'$'}{m.month}월",
+                        fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppColors.TextPrimary
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("(${'$'}{m.posts.size}건)", fontSize = 12.sp, color = AppColors.TextHint)
+                }
+                if (key in expandedKeys) {
+                    m.posts.forEach { post ->
+                        ArchiveRow(post = post, isNew = post.isNew(readIds)) { onPostClick(post) }
+                    }
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+        }
+        HorizontalDivider(color = AppColors.Divider)
+    }
+}
+
+/** 아카이브 목록의 한 줄 (피드 카드보다 조밀하게) */
+@Composable
+private fun ArchiveRow(post: Post, isNew: Boolean, onClick: () -> Unit) {
+    val (bg, fg) = categoryColors(post.category)
+    Surface(
+        shape = RoundedCornerShape(11.dp),
+        color = Color.White,
+        shadowElevation = 1.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 34.dp, end = 2.dp, top = 3.dp, bottom = 3.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(color = bg, shape = RoundedCornerShape(5.dp)) {
+                Text(
+                    Categories.short(post.category),
+                    color = fg, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+            Spacer(Modifier.width(9.dp))
+            Text(
+                post.title,
+                fontSize = 13.sp, fontWeight = FontWeight.Bold, color = AppColors.TextPrimary,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            if (isNew) {
+                Spacer(Modifier.width(6.dp))
+                Text("NEW", fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, color = AppColors.NewBadge)
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                post.effectiveDate?.toDate()?.let {
+                    SimpleDateFormat("MM.dd", Locale.KOREA).format(it)
+                } ?: "",
+                fontSize = 11.sp, color = AppColors.TextHint
+            )
+        }
+    }
 }
