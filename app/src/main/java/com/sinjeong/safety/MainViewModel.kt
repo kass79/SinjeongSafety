@@ -10,6 +10,8 @@ import com.sinjeong.safety.data.Attachment
 import com.sinjeong.safety.data.LinkAttachment
 import com.sinjeong.safety.data.Post
 import com.sinjeong.safety.data.effectiveDate
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.sinjeong.safety.data.CrewRepository
 import com.sinjeong.safety.data.PostRepository
 import com.sinjeong.safety.data.Tags
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +28,8 @@ data class UiMessage(val text: String, val isError: Boolean = false)
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = PostRepository()
+    private val crewRepo = CrewRepository()
+    private val appContext: Context = app.applicationContext
     private val prefs = app.getSharedPreferences("safety_prefs", Context.MODE_PRIVATE)
 
     // ── 원본 데이터 ──────────────────────────────────────────────
@@ -50,9 +54,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     // ── 로그인 / 읽음 상태 ───────────────────────────────────────
-    private val _isAdmin = MutableStateFlow(repo.isLoggedIn())
+    // 관리자 판정은 '로그인 여부'가 아니라 '관리자 계정인지'로 한다.
+    // 승무원 계정도 Firebase 로그인 상태이므로, 예전처럼 isLoggedIn()을 쓰면
+    // 승무원 전원에게 글쓰기·삭제 권한이 열린다.
+    private val _isAdmin = MutableStateFlow(repo.adminEmail() == CrewRepository.ADMIN_EMAIL)
     val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
     val adminEmail: String? get() = repo.adminEmail()
+
+    // ── 승무원 로그인 상태 ───────────────────────────────────────
+    private val _crewEmpNo = MutableStateFlow(crewRepo.currentEmpNo())
+    val crewEmpNo: StateFlow<String?> = _crewEmpNo.asStateFlow()
+
+    private val _crewName = MutableStateFlow(prefs.getString("crew_name", null))
+    val crewName: StateFlow<String?> = _crewName.asStateFlow()
+
+    /** 로그인 강제 스위치. 서버에서 읽어오며, 못 읽으면 false로 둔다. */
+    private val _requireLogin = MutableStateFlow(false)
+    val requireLogin: StateFlow<Boolean> = _requireLogin.asStateFlow()
+
+    /** 로그인 화면을 띄워야 하는가 (강제 ON + 승무원 미로그인 + 관리자도 아님) */
+    val needCrewLogin: StateFlow<Boolean> =
+        combine(_requireLogin, _crewEmpNo, _isAdmin) { require, empNo, admin ->
+            require && empNo == null && !admin
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _readIds = MutableStateFlow(
         prefs.getStringSet("read_ids", emptySet())?.toSet() ?: emptySet()
@@ -108,6 +132,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
+        // 로그인 강제 스위치를 서버에서 확인 (실패 시 false 유지 → 앱은 그대로 열린다)
+        viewModelScope.launch {
+            _requireLogin.value = crewRepo.requireLogin()
+        }
         viewModelScope.launch {
             repo.postsFlow().collect { result ->
                 _isLoading.value = false
@@ -161,7 +189,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 repo.login(id, password)
-                _isAdmin.value = true
+                _isAdmin.value = repo.adminEmail() == CrewRepository.ADMIN_EMAIL
+                if (!_isAdmin.value) {
+                    repo.logout()
+                    _message.value = UiMessage("관리자 계정이 아닙니다", true)
+                    return@launch
+                }
                 _message.value = UiMessage("관리자 모드로 로그인했습니다")
                 onSuccess()
             } catch (e: Exception) {
@@ -172,6 +205,64 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun logout() {
         repo.logout()
+        _isAdmin.value = false
+        _crewEmpNo.value = null
+        _message.value = UiMessage("로그아웃했습니다")
+    }
+
+    // ── 승무원 로그인 ────────────────────────────────────────────
+    /** 등록 1단계: 명단 확인 후, 예전에 등록한 이름이 있으면 돌려준다. */
+    fun crewCheckEmpNo(empNo: String, onOk: (String?) -> Unit) {
+        viewModelScope.launch {
+            if (!crewRepo.isInRoster(appContext, empNo)) {
+                _message.value = UiMessage("사업소 명단에 없는 사번입니다", true)
+                return@launch
+            }
+            // 이미 등록된 사번인지는 계정 생성 단계에서 판정한다.
+            // (계정 존재 여부를 미리 묻는 API는 사용하지 않는다)
+            onOk(crewRepo.savedName(empNo))
+        }
+    }
+
+    /** 등록 2단계: 계정 생성 */
+    fun crewRegister(empNo: String, name: String, pin: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                crewRepo.register(empNo, name, pin)
+                _crewEmpNo.value = empNo.trim()
+                _crewName.value = name.trim()
+                prefs.edit().putString("crew_name", name.trim()).apply()
+                _message.value = UiMessage("${name.trim()} 님, 환영합니다")
+                onSuccess()
+            } catch (e: FirebaseAuthUserCollisionException) {
+                _message.value = UiMessage("이미 등록된 사번입니다. 로그인해주세요", true)
+            } catch (e: Exception) {
+                _message.value = UiMessage("등록에 실패했습니다: ${e.localizedMessage}", true)
+            }
+        }
+    }
+
+    /** 로그인 */
+    fun crewSignIn(empNo: String, pin: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                crewRepo.signIn(empNo, pin)
+                _crewEmpNo.value = empNo.trim()
+                val n = crewRepo.savedName(empNo)
+                if (n != null) {
+                    _crewName.value = n
+                    prefs.edit().putString("crew_name", n).apply()
+                }
+                onSuccess()
+            } catch (e: Exception) {
+                _message.value = UiMessage("사번 또는 PIN을 확인해주세요", true)
+            }
+        }
+    }
+
+    fun crewSignOut() {
+        crewRepo.signOut()
+        _crewEmpNo.value = null
         _isAdmin.value = false
         _message.value = UiMessage("로그아웃했습니다")
     }

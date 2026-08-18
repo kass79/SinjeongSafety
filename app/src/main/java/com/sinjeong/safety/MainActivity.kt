@@ -24,6 +24,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.sinjeong.safety.ui.screens.CrewLoginScreen
 import com.sinjeong.safety.ui.screens.DetailScreen
 import com.sinjeong.safety.ui.screens.HomeScreen
 import com.sinjeong.safety.ui.screens.LoginScreen
@@ -34,6 +35,7 @@ import com.sinjeong.safety.ui.theme.SinjeongSafetyTheme
 object Routes {
     const val HOME = "home"
     const val LOGIN = "login"
+    const val CREW_LOGIN = "crew_login"      // 승무원 로그인 (게이트)
     const val WRITE = "write"                 // 새 글
     const val EDIT = "write/{postId}"         // 수정
     const val DETAIL = "detail/{postId}"
@@ -64,6 +66,8 @@ class MainActivity : ComponentActivity() {
                 val nav = rememberNavController()
                 val snackbarHost = remember { SnackbarHostState() }
                 val message by vm.message.collectAsState()
+                // 로그인 강제 스위치가 켜져 있고 아직 로그인 전이면 로그인 화면부터 보여준다.
+                val needLogin by vm.needCrewLogin.collectAsState()
 
                 LaunchedEffect(message) {
                     message?.let {
@@ -76,6 +80,13 @@ class MainActivity : ComponentActivity() {
                     snackbarHost = { SnackbarHost(snackbarHost) }
                 ) { padding ->
                     Box(Modifier.fillMaxSize().padding(padding)) {
+                      if (needLogin) {
+                        CrewLoginScreen(
+                            vm = vm,
+                            onSuccess = { },
+                            onAdminClick = { nav.navigate(Routes.LOGIN) }
+                        )
+                      } else {
                         NavHost(navController = nav, startDestination = Routes.HOME) {
 
                             composable(Routes.HOME) {
@@ -127,6 +138,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
+                      }
                     }
                 }
             }
