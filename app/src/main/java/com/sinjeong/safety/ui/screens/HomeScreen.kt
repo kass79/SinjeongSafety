@@ -104,6 +104,11 @@ fun HomeScreen(
     var showArchive by remember { mutableStateOf(false) }
     var expandedKeys by remember { mutableStateOf(setOf<String>()) }
 
+    // 보기를 전환하면 목록 위쪽으로 이동시킨다.
+    LaunchedEffect(showArchive) {
+        listState.animateScrollToItem(if (showArchive) 4 else 0)
+    }
+
     Scaffold(
         containerColor = AppColors.Background,
         floatingActionButton = {
@@ -146,6 +151,14 @@ fun HomeScreen(
                         else vm.toggleCategory(cat)
                     },
                     onSelectAll = vm::selectAll
+                )
+            }
+
+            // 피드 ↔ 지난 자료 전환 (목록 바로 위에 두어야 눌렀을 때 결과가 보인다)
+            item {
+                ArchiveToggle(
+                    showArchive = showArchive,
+                    onToggle = { showArchive = !showArchive }
                 )
             }
 
@@ -194,13 +207,6 @@ fun HomeScreen(
                 }
             }
 
-            // 지난 자료 보기 전환
-            item {
-                ArchiveToggle(
-                    showArchive = showArchive,
-                    onToggle = { showArchive = !showArchive }
-                )
-            }
 
             // 목록 끝: 의견 보내기
             item { FeedbackCard() }
