@@ -42,7 +42,7 @@ import com.sinjeong.safety.ui.theme.AppColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RegulationScreen(onBack: () -> Unit) {
+fun RegulationScreen(onBack: () -> Unit, onAsk: () -> Unit = {}) {
     val context = LocalContext.current
     var books by remember { mutableStateOf<List<RegBook>>(emptyList()) }
     var today by remember { mutableStateOf<TodayReg?>(null) }
@@ -139,6 +139,7 @@ fun RegulationScreen(onBack: () -> Unit) {
                 )
                 else -> RegulationHome(
                     books = books, today = today, isWeekend = isWeekend, total = total,
+                    onAsk = onAsk,
                     query = query, onQuery = { query = it },
                     searchResults = searchResults,
                     favorites = favArticles,
@@ -168,6 +169,7 @@ fun RegulationScreen(onBack: () -> Unit) {
 @Composable
 private fun RegulationHome(
     books: List<RegBook>, today: TodayReg?, isWeekend: Boolean, total: Int,
+    onAsk: () -> Unit,
     query: String, onQuery: (String) -> Unit,
     searchResults: List<Pair<String, RegArticle>>,
     favorites: List<Pair<String, RegArticle>>,
@@ -182,6 +184,13 @@ private fun RegulationHome(
         item {
             Spacer(Modifier.height(14.dp))
             TodayCard(today, isWeekend, onTodayClick)
+        }
+        // 규정에 물어보기 (오늘의 규정 바로 아래 / 조문 검색창 바로 위)
+        item {
+            AskEntryBanner(
+                onClick = onAsk,
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)
+            )
         }
         // 검색
         item {

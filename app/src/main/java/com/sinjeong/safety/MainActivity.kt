@@ -29,6 +29,7 @@ import com.sinjeong.safety.ui.screens.SettingsScreen
 import com.sinjeong.safety.ui.screens.DetailScreen
 import com.sinjeong.safety.ui.screens.HomeScreen
 import com.sinjeong.safety.ui.screens.LoginScreen
+import com.sinjeong.safety.ui.screens.RegulationAskScreen
 import com.sinjeong.safety.ui.screens.RegulationScreen
 import com.sinjeong.safety.ui.screens.WriteScreen
 import com.sinjeong.safety.ui.theme.SinjeongSafetyTheme
@@ -42,6 +43,7 @@ object Routes {
     const val EDIT = "write/{postId}"         // 수정
     const val DETAIL = "detail/{postId}"
     const val REGULATION = "regulation"
+    const val REG_ASK = "reg_ask"             // 규정에 물어보기 (기기 안 검색)
     fun detail(id: String) = "detail/$id"
     fun edit(id: String) = "write/$id"
 }
@@ -103,6 +105,7 @@ class MainActivity : ComponentActivity() {
                                     onLoginClick = { nav.navigate(Routes.LOGIN) },
                                     onWriteClick = { nav.navigate(Routes.WRITE) },
                                     onRegulationClick = { nav.navigate(Routes.REGULATION) },
+                                    onAskClick = { nav.navigate(Routes.REG_ASK) },
                                     onSettingsClick = { nav.navigate(Routes.SETTINGS) }
                                 )
                             }
@@ -112,7 +115,14 @@ class MainActivity : ComponentActivity() {
                             }
 
                             composable(Routes.REGULATION) {
-                                RegulationScreen(onBack = { nav.popBackStack() })
+                                RegulationScreen(
+                                    onBack = { nav.popBackStack() },
+                                    onAsk = { nav.navigate(Routes.REG_ASK) }
+                                )
+                            }
+
+                            composable(Routes.REG_ASK) {
+                                RegulationAskScreen(onBack = { nav.popBackStack() })
                             }
 
                             composable(Routes.LOGIN) {

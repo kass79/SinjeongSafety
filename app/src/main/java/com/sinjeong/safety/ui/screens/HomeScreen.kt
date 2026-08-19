@@ -97,6 +97,7 @@ fun HomeScreen(
     onLoginClick: () -> Unit,
     onWriteClick: () -> Unit,
     onRegulationClick: () -> Unit,
+    onAskClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
     val posts by vm.filteredPosts.collectAsState()
@@ -117,9 +118,9 @@ fun HomeScreen(
     var expandedKeys by remember { mutableStateOf(setOf<String>()) }
 
     // 전환 버튼이 목록 아래에 있으므로, 누르면 결과가 시작되는 위치로 올려준다.
-    // (헤더·배너·검색·카테고리 4개 다음이 목록의 첫 항목)
+    // (헤더·배너·검색·카테고리·규정물어보기 5개 다음이 목록의 첫 항목)
     LaunchedEffect(showArchive) {
-        listState.animateScrollToItem(if (showArchive) 4 else 0)
+        listState.animateScrollToItem(if (showArchive) 5 else 0)
     }
 
     Scaffold(
@@ -171,6 +172,14 @@ fun HomeScreen(
                         else vm.toggleCategory(cat)
                     },
                     onSelectAll = vm::selectAll
+                )
+            }
+
+            // 규정에 물어보기 (게시글 검색바와 헷갈리지 않게 카테고리 아래에 둔다)
+            item {
+                AskEntryBanner(
+                    onClick = onAskClick,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                 )
             }
 
