@@ -1,6 +1,11 @@
 package com.sinjeong.safety.ui.screens
 
 import androidx.compose.foundation.Image
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +29,9 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Logout
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.*
@@ -88,7 +96,8 @@ fun HomeScreen(
     onPostClick: (Post) -> Unit,
     onLoginClick: () -> Unit,
     onWriteClick: () -> Unit,
-    onRegulationClick: () -> Unit
+    onRegulationClick: () -> Unit,
+    onSettingsClick: () -> Unit
 ) {
     val posts by vm.filteredPosts.collectAsState()
     // 아카이브 목록도 여기서 구독한다. LazyColumn 안에서는 collectAsState를 쓸 수 없다.
@@ -97,6 +106,9 @@ fun HomeScreen(
     val isAdmin by vm.isAdmin.collectAsState()
     val selectedCategory by vm.selectedCategory.collectAsState()
     val searchQuery by vm.searchQuery.collectAsState()
+    val favoriteIds by vm.favoriteIds.collectAsState()
+    val favoritesOnly by vm.showFavoritesOnly.collectAsState()
+    val weatherWarning by vm.weatherWarning.collectAsState()
     val readIds by vm.readIds.collectAsState()
     val listState = rememberLazyListState()
     var showLogoutDialog by remember { mutableStateOf(false) }
@@ -104,7 +116,8 @@ fun HomeScreen(
     var showArchive by remember { mutableStateOf(false) }
     var expandedKeys by remember { mutableStateOf(setOf<String>()) }
 
-    // 보기를 전환하면 목록 위쪽으로 이동시킨다.
+    // 전환 버튼이 목록 아래에 있으므로, 누르면 결과가 시작되는 위치로 올려준다.
+    // (헤더·배너·검색·카테고리 4개 다음이 목록의 첫 항목)
     LaunchedEffect(showArchive) {
         listState.animateScrollToItem(if (showArchive) 4 else 0)
     }
@@ -133,9 +146,16 @@ fun HomeScreen(
             item {
                 HeaderBar(
                     isAdmin = isAdmin,
-                    onShieldClick = { if (isAdmin) showLogoutDialog = true else onLoginClick() }
+                    weatherWarning = weatherWarning,
+                    onShieldClick = { if (isAdmin) showLogoutDialog = true else onLoginClick() },
+                    onSettingsClick = onSettingsClick
                 )
             }
+            // 기상특보 발효 중이면 배지 (없으면 아무것도 안 보임)
+            weatherWarning?.let { warning ->
+                item { WeatherWarningBanner(warning) }
+            }
+
             item { MascotBanner() }
             item {
                 SearchBar(
@@ -154,11 +174,12 @@ fun HomeScreen(
                 )
             }
 
-            // 피드 ↔ 지난 자료 전환 (목록 바로 위에 두어야 눌렀을 때 결과가 보인다)
+            // 즐겨찾기만 모아 보기
             item {
-                ArchiveToggle(
-                    showArchive = showArchive,
-                    onToggle = { showArchive = !showArchive }
+                FavoriteFilterChip(
+                    on = favoritesOnly,
+                    count = favoriteIds.size,
+                    onToggle = { vm.setShowFavoritesOnly(!favoritesOnly) }
                 )
             }
 
@@ -208,6 +229,14 @@ fun HomeScreen(
             }
 
 
+            // 피드 ↔ 지난 자료 전환 (의견 보내기 바로 위)
+            item {
+                ArchiveToggle(
+                    showArchive = showArchive,
+                    onToggle = { showArchive = !showArchive }
+                )
+            }
+
             // 목록 끝: 의견 보내기
             item { FeedbackCard() }
             item { Spacer(Modifier.height(12.dp)) }
@@ -233,7 +262,12 @@ fun HomeScreen(
 
 // ── 상단 헤더: 마스코트 아이콘 + 사업소명 + 초록점 + 방패 ────────
 @Composable
-private fun HeaderBar(isAdmin: Boolean, onShieldClick: () -> Unit) {
+private fun HeaderBar(
+    isAdmin: Boolean,
+    weatherWarning: String?,
+    onShieldClick: () -> Unit,
+    onSettingsClick: () -> Unit
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -275,6 +309,70 @@ private fun HeaderBar(isAdmin: Boolean, onShieldClick: () -> Unit) {
         }
         // 캘린더 아이콘 → 신정승무캘린더 앱 열기
         CalendarButton()
+        Spacer(Modifier.width(8.dp))
+
+        // 날씨 아이콘 — 특보 발효 중이면 주황색으로 은은하게 맥박친다.
+        // 빠른 점멸은 매일 보는 화면에선 금방 피로해져 무시하게 되므로 쓰지 않는다.
+        var showWeatherDialog by remember { mutableStateOf(false) }
+        val warnActive = weatherWarning != null
+        val pulse = if (warnActive) {
+            val t = rememberInfiniteTransition(label = "weatherPulse")
+            t.animateFloat(
+                initialValue = 0.45f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(tween(1100), RepeatMode.Reverse),
+                label = "pulse"
+            ).value
+        } else 1f
+        Surface(
+            shape = CircleShape,
+            color = if (warnActive) Color(0xFFFF8A3D).copy(alpha = pulse * 0.28f) else Color.White,
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                if (warnActive) Color(0xFFFF8A3D).copy(alpha = pulse) else AppColors.Divider
+            ),
+            modifier = Modifier.size(42.dp).clickable { showWeatherDialog = true }
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(if (warnActive) "⚠️" else "⛅", fontSize = 19.sp)
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+
+        if (showWeatherDialog) {
+            AlertDialog(
+                onDismissRequest = { showWeatherDialog = false },
+                title = { Text(if (warnActive) "기상특보 발효 중" else "기상특보 없음") },
+                text = {
+                    Text(
+                        if (warnActive)
+                            "서울 " + weatherWarning + " 발효 중입니다.\n\n폭염 및 이례상황 발생 시 관제보고 철저!"
+                        else
+                            "현재 서울에 발효 중인 기상특보가 없습니다.\n(1시간 간격으로 갱신됩니다)"
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { showWeatherDialog = false }) { Text("확인") }
+                }
+            )
+        }
+
+        // 설정 아이콘 → 설정 화면
+        Surface(
+            shape = CircleShape,
+            color = Color.White,
+            border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
+            modifier = Modifier.size(42.dp).clickable(onClick = onSettingsClick)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Outlined.Settings,
+                    contentDescription = "설정",
+                    tint = AppColors.Primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
         Spacer(Modifier.width(8.dp))
 
         // 방패 아이콘 → 관리자 로그인 / 로그아웃
@@ -822,6 +920,79 @@ private fun ArchiveRow(post: Post, isNew: Boolean, onClick: () -> Unit) {
                 } ?: "",
                 fontSize = 11.sp, color = AppColors.TextHint
             )
+        }
+    }
+}
+
+/** 즐겨찾기만 모아 보기 칩 */
+@Composable
+private fun FavoriteFilterChip(on: Boolean, count: Int, onToggle: () -> Unit) {
+    if (count == 0 && !on) return   // 별표한 글이 하나도 없으면 자리만 차지하므로 숨긴다
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = if (on) Color(0xFFF5B301) else Color.White,
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp, if (on) Color(0xFFF5B301) else AppColors.Divider
+            ),
+            modifier = Modifier.clickable(onClick = onToggle)
+        ) {
+            Row(
+                Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    if (on) Icons.Default.Star else Icons.Outlined.StarBorder,
+                    contentDescription = null,
+                    tint = if (on) Color.White else Color(0xFFF5B301),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "즐겨찾기 " + count + "건",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (on) Color.White else AppColors.TextPrimary
+                )
+            }
+        }
+    }
+}
+
+/** 기상특보 배지 — 발효 중일 때만 홈 상단에 나타난다 */
+@Composable
+private fun WeatherWarningBanner(text: String) {
+    Surface(
+        color = Color(0xFFFFF1E6),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("⚠️", fontSize = 17.sp)
+            Spacer(Modifier.width(9.dp))
+            Column {
+                Text(
+                    "서울 " + text + " 발효 중",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF8A3D00)
+                )
+                Text(
+                    "이례상황 발생 시 관제보고 철저",
+                    fontSize = 12.sp,
+                    color = Color(0xFFB05E1E)
+                )
+            }
         }
     }
 }

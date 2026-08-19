@@ -10,7 +10,11 @@ import com.sinjeong.safety.data.Attachment
 import com.sinjeong.safety.data.LinkAttachment
 import com.sinjeong.safety.data.Post
 import com.sinjeong.safety.data.effectiveDate
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.messaging.FirebaseMessaging
+import com.sinjeong.safety.data.CrewRepository
 import com.sinjeong.safety.data.PostRepository
+import com.sinjeong.safety.data.WeatherRepository
 import com.sinjeong.safety.data.Tags
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +30,8 @@ data class UiMessage(val text: String, val isError: Boolean = false)
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = PostRepository()
+    private val crewRepo = CrewRepository()
+    private val appContext: Context = app.applicationContext
     private val prefs = app.getSharedPreferences("safety_prefs", Context.MODE_PRIVATE)
 
     // ── 원본 데이터 ──────────────────────────────────────────────
@@ -50,9 +56,47 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     // ── 로그인 / 읽음 상태 ───────────────────────────────────────
-    private val _isAdmin = MutableStateFlow(repo.isLoggedIn())
+    // 관리자 판정은 '로그인 여부'가 아니라 '관리자 계정인지'로 한다.
+    // 승무원 계정도 Firebase 로그인 상태이므로, 예전처럼 isLoggedIn()을 쓰면
+    // 승무원 전원에게 글쓰기·삭제 권한이 열린다.
+    private val _isAdmin = MutableStateFlow(repo.adminEmail() == CrewRepository.ADMIN_EMAIL)
     val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
     val adminEmail: String? get() = repo.adminEmail()
+
+    // ── 승무원 로그인 상태 ───────────────────────────────────────
+    private val _crewEmpNo = MutableStateFlow(crewRepo.currentEmpNo())
+    val crewEmpNo: StateFlow<String?> = _crewEmpNo.asStateFlow()
+
+    private val _crewName = MutableStateFlow(prefs.getString("crew_name", null))
+    val crewName: StateFlow<String?> = _crewName.asStateFlow()
+
+    // ── 기상특보 배지 ───────────────────────────────────────────
+    private val _weatherWarning = MutableStateFlow<String?>(null)
+    val weatherWarning: StateFlow<String?> = _weatherWarning.asStateFlow()
+
+    // ── 알림 설정 (기기별 저장) ─────────────────────────────────
+    private val _notificationsEnabled =
+        MutableStateFlow(prefs.getBoolean("notify_new_posts", true))
+    val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
+
+    /** 새 글 알림 켜기/끄기. FCM 토픽 구독을 함께 바꾼다. */
+    fun setNotificationsEnabled(enabled: Boolean) {
+        _notificationsEnabled.value = enabled
+        prefs.edit().putBoolean("notify_new_posts", enabled).apply()
+        val fm = FirebaseMessaging.getInstance()
+        if (enabled) fm.subscribeToTopic(TOPIC_NEW_POSTS) else fm.unsubscribeFromTopic(TOPIC_NEW_POSTS)
+        _message.value = UiMessage(if (enabled) "새 글 알림을 켰습니다" else "새 글 알림을 껐습니다")
+    }
+
+    /** 로그인 강제 스위치. 서버에서 읽어오며, 못 읽으면 false로 둔다. */
+    private val _requireLogin = MutableStateFlow(false)
+    val requireLogin: StateFlow<Boolean> = _requireLogin.asStateFlow()
+
+    /** 로그인 화면을 띄워야 하는가 (강제 ON + 승무원 미로그인 + 관리자도 아님) */
+    val needCrewLogin: StateFlow<Boolean> =
+        combine(_requireLogin, _crewEmpNo, _isAdmin) { require, empNo, admin ->
+            require && empNo == null && !admin
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _readIds = MutableStateFlow(
         prefs.getStringSet("read_ids", emptySet())?.toSet() ?: emptySet()
@@ -65,10 +109,48 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     )
     val confirmedIds: StateFlow<Set<String>> = _confirmedIds.asStateFlow()
 
+    // ── 즐겨찾기 (계정에 저장 → 폰을 바꿔도 유지) ───────────────
+    // 기기에도 함께 두어 오프라인이나 로그인 전에도 바로 보이게 한다.
+    private val _favoriteIds = MutableStateFlow(
+        prefs.getStringSet("favorite_ids", emptySet())?.toSet() ?: emptySet()
+    )
+    val favoriteIds: StateFlow<Set<String>> = _favoriteIds.asStateFlow()
+
+    /** 즐겨찾기만 모아 보기 */
+    private val _showFavoritesOnly = MutableStateFlow(false)
+    val showFavoritesOnly: StateFlow<Boolean> = _showFavoritesOnly.asStateFlow()
+
+    fun isFavorite(postId: String): Boolean = postId in _favoriteIds.value
+
+    fun toggleFavorite(postId: String) {
+        val updated = if (postId in _favoriteIds.value) _favoriteIds.value - postId
+                      else _favoriteIds.value + postId
+        _favoriteIds.value = updated
+        prefs.edit().putStringSet("favorite_ids", updated).apply()
+        viewModelScope.launch { runCatching { crewRepo.saveFavorites(updated) } }
+    }
+
+    fun setShowFavoritesOnly(on: Boolean) { _showFavoritesOnly.value = on }
+
+    /** 로그인 직후 서버에 저장된 즐겨찾기를 불러온다. */
+    private fun syncFavorites() {
+        viewModelScope.launch {
+            val server = runCatching { crewRepo.loadFavorites() }.getOrNull() ?: return@launch
+            // 기기에만 있던 것과 합쳐서 잃어버리지 않게 한다
+            val merged = server + _favoriteIds.value
+            _favoriteIds.value = merged
+            prefs.edit().putStringSet("favorite_ids", merged).apply()
+            if (merged != server) runCatching { crewRepo.saveFavorites(merged) }
+        }
+    }
+
     // ── 필터링된 피드 (핀 고정 우선 + 카테고리/검색) ─────────────
     val filteredPosts: StateFlow<List<Post>> =
-        combine(_posts, _selectedCategory, _searchQuery) { posts, cat, query ->
+        combine(
+            _posts, _selectedCategory, _searchQuery, _showFavoritesOnly, _favoriteIds
+        ) { posts, cat, query, favOnly, favIds ->
             posts.asSequence()
+                .filter { !favOnly || it.id in favIds }
                 .filter { cat == null || it.category == cat }
                 .filter {
                     query.isBlank() ||
@@ -108,6 +190,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
+        // 로그인 강제 스위치를 서버에서 확인 (실패 시 false 유지 → 앱은 그대로 열린다)
+        viewModelScope.launch {
+            _requireLogin.value = crewRepo.requireLogin()
+        }
+        if (crewRepo.isCrewLoggedIn()) syncFavorites()
+        // 서울 기상특보 확인 (실패하면 배지가 안 뜰 뿐 앱은 정상)
+        viewModelScope.launch {
+            _weatherWarning.value = runCatching {
+                WeatherRepository.getWarningText(appContext)
+            }.getOrNull()
+        }
         viewModelScope.launch {
             repo.postsFlow().collect { result ->
                 _isLoading.value = false
@@ -161,7 +254,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 repo.login(id, password)
-                _isAdmin.value = true
+                _isAdmin.value = repo.adminEmail() == CrewRepository.ADMIN_EMAIL
+                if (!_isAdmin.value) {
+                    repo.logout()
+                    _message.value = UiMessage("관리자 계정이 아닙니다", true)
+                    return@launch
+                }
                 _message.value = UiMessage("관리자 모드로 로그인했습니다")
                 onSuccess()
             } catch (e: Exception) {
@@ -172,6 +270,66 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun logout() {
         repo.logout()
+        _isAdmin.value = false
+        _crewEmpNo.value = null
+        _message.value = UiMessage("로그아웃했습니다")
+    }
+
+    // ── 승무원 로그인 ────────────────────────────────────────────
+    /** 등록 1단계: 명단 확인 후, 예전에 등록한 이름이 있으면 돌려준다. */
+    fun crewCheckEmpNo(empNo: String, onOk: (String?) -> Unit) {
+        viewModelScope.launch {
+            if (!crewRepo.isInRoster(appContext, empNo)) {
+                _message.value = UiMessage("사업소 명단에 없는 사번입니다", true)
+                return@launch
+            }
+            // 이미 등록된 사번인지는 계정 생성 단계에서 판정한다.
+            // (계정 존재 여부를 미리 묻는 API는 사용하지 않는다)
+            onOk(crewRepo.savedName(empNo))
+        }
+    }
+
+    /** 등록 2단계: 계정 생성 */
+    fun crewRegister(empNo: String, name: String, pin: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                crewRepo.register(empNo, name, pin)
+                _crewEmpNo.value = empNo.trim()
+                _crewName.value = name.trim()
+                prefs.edit().putString("crew_name", name.trim()).apply()
+                syncFavorites()
+                _message.value = UiMessage("${name.trim()} 님, 환영합니다")
+                onSuccess()
+            } catch (e: FirebaseAuthUserCollisionException) {
+                _message.value = UiMessage("이미 등록된 사번입니다. 로그인해주세요", true)
+            } catch (e: Exception) {
+                _message.value = UiMessage("등록에 실패했습니다: ${e.localizedMessage}", true)
+            }
+        }
+    }
+
+    /** 로그인 */
+    fun crewSignIn(empNo: String, pin: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                crewRepo.signIn(empNo, pin)
+                _crewEmpNo.value = empNo.trim()
+                val n = crewRepo.savedName(empNo)
+                if (n != null) {
+                    _crewName.value = n
+                    prefs.edit().putString("crew_name", n).apply()
+                }
+                syncFavorites()
+                onSuccess()
+            } catch (e: Exception) {
+                _message.value = UiMessage("사번 또는 PIN을 확인해주세요", true)
+            }
+        }
+    }
+
+    fun crewSignOut() {
+        crewRepo.signOut()
+        _crewEmpNo.value = null
         _isAdmin.value = false
         _message.value = UiMessage("로그아웃했습니다")
     }
@@ -268,4 +426,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    companion object {
+        const val TOPIC_NEW_POSTS = "new_posts"
+    }
+
 }
