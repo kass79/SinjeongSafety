@@ -148,7 +148,8 @@ fun RegulationAskScreen(onBack: () -> Unit) {
 private fun AskTopBar(total: Int, onBack: () -> Unit) {
     Surface(color = AppColors.Primary) {
         Row(
-            Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp),
+            // 상태표시줄 여백은 MainActivity의 Scaffold가 이미 넣어 준다 (여기서 또 넣으면 두 배)
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack, modifier = Modifier.size(34.dp)) {
@@ -185,7 +186,7 @@ private fun AskInputBar(
 ) {
     Surface(color = Color.White, shadowElevation = 8.dp) {
         Row(
-            Modifier.fillMaxWidth().navigationBarsPadding().imePadding()
+            Modifier.fillMaxWidth().imePadding()
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
