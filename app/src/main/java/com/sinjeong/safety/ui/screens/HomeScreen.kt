@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Logout
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.*
@@ -88,7 +89,8 @@ fun HomeScreen(
     onPostClick: (Post) -> Unit,
     onLoginClick: () -> Unit,
     onWriteClick: () -> Unit,
-    onRegulationClick: () -> Unit
+    onRegulationClick: () -> Unit,
+    onSettingsClick: () -> Unit
 ) {
     val posts by vm.filteredPosts.collectAsState()
     // 아카이브 목록도 여기서 구독한다. LazyColumn 안에서는 collectAsState를 쓸 수 없다.
@@ -134,7 +136,8 @@ fun HomeScreen(
             item {
                 HeaderBar(
                     isAdmin = isAdmin,
-                    onShieldClick = { if (isAdmin) showLogoutDialog = true else onLoginClick() }
+                    onShieldClick = { if (isAdmin) showLogoutDialog = true else onLoginClick() },
+                    onSettingsClick = onSettingsClick
                 )
             }
             item { MascotBanner() }
@@ -234,7 +237,11 @@ fun HomeScreen(
 
 // ── 상단 헤더: 마스코트 아이콘 + 사업소명 + 초록점 + 방패 ────────
 @Composable
-private fun HeaderBar(isAdmin: Boolean, onShieldClick: () -> Unit) {
+private fun HeaderBar(
+    isAdmin: Boolean,
+    onShieldClick: () -> Unit,
+    onSettingsClick: () -> Unit
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -276,6 +283,24 @@ private fun HeaderBar(isAdmin: Boolean, onShieldClick: () -> Unit) {
         }
         // 캘린더 아이콘 → 신정승무캘린더 앱 열기
         CalendarButton()
+        Spacer(Modifier.width(8.dp))
+
+        // 설정 아이콘 → 설정 화면
+        Surface(
+            shape = CircleShape,
+            color = Color.White,
+            border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
+            modifier = Modifier.size(42.dp).clickable(onClick = onSettingsClick)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Outlined.Settings,
+                    contentDescription = "설정",
+                    tint = AppColors.Primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
         Spacer(Modifier.width(8.dp))
 
         // 방패 아이콘 → 관리자 로그인 / 로그아웃

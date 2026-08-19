@@ -25,6 +25,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.sinjeong.safety.ui.screens.CrewLoginScreen
+import com.sinjeong.safety.ui.screens.SettingsScreen
 import com.sinjeong.safety.ui.screens.DetailScreen
 import com.sinjeong.safety.ui.screens.HomeScreen
 import com.sinjeong.safety.ui.screens.LoginScreen
@@ -36,6 +37,7 @@ object Routes {
     const val HOME = "home"
     const val LOGIN = "login"
     const val CREW_LOGIN = "crew_login"      // 승무원 로그인 (게이트)
+    const val SETTINGS = "settings"          // 설정
     const val WRITE = "write"                 // 새 글
     const val EDIT = "write/{postId}"         // 수정
     const val DETAIL = "detail/{postId}"
@@ -53,7 +55,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // 새 게시물 푸시 토픽 구독 + 안드로이드 13+ 알림 권한 요청
-        FirebaseMessaging.getInstance().subscribeToTopic("new_posts")
+        // 알림을 끈 적이 없다면 새 글 토픽을 구독한다 (설정 화면에서 끄면 해제된다)
+        if (getSharedPreferences("safety_prefs", MODE_PRIVATE)
+                .getBoolean("notify_new_posts", true)
+        ) {
+            FirebaseMessaging.getInstance().subscribeToTopic("new_posts")
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED
@@ -95,8 +102,13 @@ class MainActivity : ComponentActivity() {
                                     onPostClick = { post -> nav.navigate(Routes.detail(post.id)) },
                                     onLoginClick = { nav.navigate(Routes.LOGIN) },
                                     onWriteClick = { nav.navigate(Routes.WRITE) },
-                                    onRegulationClick = { nav.navigate(Routes.REGULATION) }
+                                    onRegulationClick = { nav.navigate(Routes.REGULATION) },
+                                    onSettingsClick = { nav.navigate(Routes.SETTINGS) }
                                 )
+                            }
+
+                            composable(Routes.SETTINGS) {
+                                SettingsScreen(vm = vm, onBack = { nav.popBackStack() })
                             }
 
                             composable(Routes.REGULATION) {

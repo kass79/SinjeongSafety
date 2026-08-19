@@ -11,6 +11,7 @@ import com.sinjeong.safety.data.LinkAttachment
 import com.sinjeong.safety.data.Post
 import com.sinjeong.safety.data.effectiveDate
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.messaging.FirebaseMessaging
 import com.sinjeong.safety.data.CrewRepository
 import com.sinjeong.safety.data.PostRepository
 import com.sinjeong.safety.data.Tags
@@ -67,6 +68,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _crewName = MutableStateFlow(prefs.getString("crew_name", null))
     val crewName: StateFlow<String?> = _crewName.asStateFlow()
+
+    // ── 알림 설정 (기기별 저장) ─────────────────────────────────
+    private val _notificationsEnabled =
+        MutableStateFlow(prefs.getBoolean("notify_new_posts", true))
+    val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
+
+    /** 새 글 알림 켜기/끄기. FCM 토픽 구독을 함께 바꾼다. */
+    fun setNotificationsEnabled(enabled: Boolean) {
+        _notificationsEnabled.value = enabled
+        prefs.edit().putBoolean("notify_new_posts", enabled).apply()
+        val fm = FirebaseMessaging.getInstance()
+        if (enabled) fm.subscribeToTopic(TOPIC_NEW_POSTS) else fm.unsubscribeFromTopic(TOPIC_NEW_POSTS)
+        _message.value = UiMessage(if (enabled) "새 글 알림을 켰습니다" else "새 글 알림을 껐습니다")
+    }
 
     /** 로그인 강제 스위치. 서버에서 읽어오며, 못 읽으면 false로 둔다. */
     private val _requireLogin = MutableStateFlow(false)
@@ -359,4 +374,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    companion object {
+        const val TOPIC_NEW_POSTS = "new_posts"
+    }
+
 }
