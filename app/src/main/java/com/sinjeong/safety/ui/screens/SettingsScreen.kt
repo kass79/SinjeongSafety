@@ -314,6 +314,16 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
+                // 저작권 표기는 이웃 앱(신정승무캘린더)과 문구를 통일한다
+                Text(
+                    "© 2026 KANG SUNG JIN. ALL RIGHTS RESERVED.",
+                    fontSize = 11.sp,
+                    color = AppColors.TextHint,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 18.dp)
+                )
                 Spacer(Modifier.height(24.dp))
             }
         }

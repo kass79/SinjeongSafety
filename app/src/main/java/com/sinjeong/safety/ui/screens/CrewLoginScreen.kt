@@ -5,9 +5,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -38,9 +41,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,16 +77,23 @@ fun CrewLoginScreen(
     val message by vm.message.collectAsState()
     LaunchedEffect(message) { if (message?.isError == true) loading = false }
 
+    // 키보드가 떴거나 세로가 짧은 화면이면 상단 히어로·여백을 걷어내 입력칸 자리를 확보한다
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val shortScreen = LocalConfiguration.current.screenHeightDp < 640
+    val compactTop = imeVisible || shortScreen
+
     Surface(color = AppColors.Background, modifier = Modifier.fillMaxSize()) {
         Column(
             Modifier
                 .fillMaxSize()
+                // 키보드가 사번·PIN 입력칸을 가리지 않도록 스크롤 앞에서 인셋을 준다
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(48.dp))
-            Image(
+            Spacer(Modifier.height(if (compactTop) 12.dp else 48.dp))
+            if (!compactTop) Image(
                 painter = painterResource(R.drawable.mascot_hello),
                 contentDescription = null,
                 modifier = Modifier.size(100.dp)
@@ -97,7 +110,7 @@ fun CrewLoginScreen(
                 fontSize = 13.sp,
                 color = AppColors.TextSecondary
             )
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(if (compactTop) 14.dp else 28.dp))
 
             when (step) {
 
@@ -293,7 +306,18 @@ fun CrewLoginScreen(
                 }
             }
 
-            Spacer(Modifier.height(40.dp))
+            // 저작권은 모든 단계에서 한 번만, 이웃 앱(신정승무캘린더)과 같은 문구로 표시한다
+            Spacer(Modifier.height(if (compactTop) 14.dp else 28.dp))
+            Text(
+                "© 2026  KANG SUNG JIN",
+                fontSize = if (compactTop) 11.sp else 12.sp,
+                letterSpacing = if (compactTop) 1.5.sp else 2.5.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = AppColors.Primary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(24.dp))
         }
     }
 }

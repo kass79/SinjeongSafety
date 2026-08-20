@@ -371,8 +371,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 syncFavorites()
                 onSuccess()
+            } catch (e: com.google.firebase.auth.FirebaseAuthInvalidUserException) {
+                // 그 사번으로 만든 계정이 아예 없다
+                _message.value = UiMessage("아직 등록하지 않은 사번입니다. 아래 '처음이신가요? 등록하기'를 눌러 PIN을 만들어주세요", true)
+            } catch (e: com.google.firebase.auth.FirebaseAuthInvalidCredentialsException) {
+                // PIN 불일치. 다만 이메일 열거 보호가 켜져 있으면 '계정 없음'도 여기로 온다.
+                _message.value = UiMessage("PIN이 맞지 않습니다. 등록한 적이 없다면 '처음이신가요? 등록하기'를 눌러주세요", true)
             } catch (e: Exception) {
-                _message.value = UiMessage("사번 또는 PIN을 확인해주세요", true)
+                // 설정 문제(로그인 제공업체 미사용 등)를 눈으로 보려면 원문이 필요하다
+                _message.value = UiMessage("로그인 실패: ${e.localizedMessage}", true)
             }
         }
     }
