@@ -5,8 +5,12 @@ Android(Kotlin/Compose) + Firebase(SinjeongSafety/sinjeongsafety 프로젝트). 
 
 ## 현재 상태 (2026-08-22 기준 — 숫자는 build.gradle.kts를 믿을 것)
 
-- `main` 최신 `7688491`, **versionCode 5 / versionName 1.0.4**
+- `main` 최신 `fe42b05`, **versionCode 6 / versionName 1.0.5**
 - 최근 변경: 규정에 물어보기(오프라인 검색, v1.0.3) → 규정 뷰어 시스템 뒤로가기 한 단계씩(v1.0.4)
+  → **게시물 확인 현황 + 엑셀/PDF 내보내기(v1.0.5)**
+- 확인 현황: 확인을 누르면 `posts/{글}/confirms/{사번}` 에 이름·시각이 남는다. 관리자가 상세의
+  "N명 확인 ›" 으로 들어가 확인/미확인 명단을 보고, 오른쪽 위 아이콘으로 CSV 공유·인쇄(PDF)한다.
+  미확인 = 사번 명단(assets + config/roster) − 확인한 사번. **보안 규칙을 콘솔에 반영해야 기록이 남는다.**
 - 배포: 플레이 비공개 테스트(테스터 11명) + 카톡 APK(zip). 산출물 이름 관례:
   `C:\Users\admin\Downloads\슬기로운승무생활_v{버전}.apk` + 같은 이름 `.zip`
 
@@ -18,8 +22,9 @@ anthropic-skills:sinjeong-safety-app 스킬에는 "사용자가 GitHub 웹에서
 - 이 폴더가 곧 클론입니다. **직접 수정 → 커밋 → `git push origin main`** 하면 됩니다.
 - 푸시하면 GitHub Actions가 자동으로 debug APK + release AAB를 빌드합니다(서명 키는 Secrets).
   `gh run watch`로 초록불 확인 → `gh run download`로 산출물 회수.
-- **로컬 빌드도 됩니다**: Android SDK·JDK17 설치돼 있음. 단 경로에 한글이 있어 AGP가 거부하므로
-  빌드할 때만 `gradle.properties`에 `android.overridePathCheck=true`를 넣고 **커밋 전에 되돌릴 것**.
+- **로컬 빌드도 됩니다**: Android SDK·JDK17 설치돼 있음. 단 **저장소에 gradle wrapper가 없고**
+  경로에 한글이 있어 AGP가 거부하므로, 파일을 고치지 말고 `-P`로 넘길 것(되돌릴 게 없어 안전):
+  `C:\Users\admin\.gradle\wrapper\dists\gradle-9.0.0-bin\d6wjpkvcgsg3oed0qlfss3wgl\gradle-9.0.0\bin\gradle.bat -Pandroid.overridePathCheck=true --console=plain :app:assembleDebug`
 - 사용자가 GitHub 웹에서 직접 커밋하는 경우가 있으니 **작업 시작·푸시 직전에 `git pull` 필수**.
 - 스킬의 절대 규칙은 그대로 유효: 패키지 `com.sinjeong.safety` 고정 / Firebase는 `sinjeongsafety`만
   (`sinjeong-safety`는 미사용 중복) / versionCode는 실제 값 확인 후 +1 / 서명 키 재생성 금지 /
