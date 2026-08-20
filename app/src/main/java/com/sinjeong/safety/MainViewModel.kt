@@ -14,10 +14,14 @@ import com.sinjeong.safety.data.Post
 import com.sinjeong.safety.data.effectiveDate
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.messaging.FirebaseMessaging
+import com.sinjeong.safety.data.Answer
 import com.sinjeong.safety.data.CrewRepository
+import com.sinjeong.safety.data.Question
+import com.sinjeong.safety.data.QuestionRepository
 import com.sinjeong.safety.data.PostRepository
 import com.sinjeong.safety.data.WeatherRepository
 import com.sinjeong.safety.data.Tags
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,12 +37,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = PostRepository()
     private val crewRepo = CrewRepository()
+    private val questionRepo = QuestionRepository()
     private val appContext: Context = app.applicationContext
     private val prefs = app.getSharedPreferences("safety_prefs", Context.MODE_PRIVATE)
 
     // ── 원본 데이터 ──────────────────────────────────────────────
     private val _posts = MutableStateFlow<List<Post>>(emptyList())
     val posts: StateFlow<List<Post>> = _posts.asStateFlow()
+
+    // 질의응답 목록 (최신순 — 저장소가 이미 정렬해서 준다)
+    private val _questions = MutableStateFlow<List<Question>>(emptyList())
+    val questions: StateFlow<List<Question>> = _questions.asStateFlow()
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -49,6 +58,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _message = MutableStateFlow<UiMessage?>(null)
     val message: StateFlow<UiMessage?> = _message.asStateFlow()
     fun consumeMessage() { _message.value = null }
+    /** 화면에서 직접 안내를 띄울 때 (입력 검증 등) */
+    fun showMessage(text: String, isError: Boolean = false) {
+        _message.value = UiMessage(text, isError)
+    }
 
     // ── 필터 상태 ────────────────────────────────────────────────
     private val _selectedCategory = MutableStateFlow<String?>(null)   // null = 전체 카테고리
@@ -210,6 +223,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 result.onFailure {
                     _message.value = UiMessage("게시물을 불러오지 못했습니다: ${it.localizedMessage}", true)
                 }
+            }
+        }
+        // 질의응답. 실패해도 앱 본 기능은 멀쩡해야 하므로 조용히 비워 둔다.
+        viewModelScope.launch {
+            questionRepo.questionsFlow().collect { result ->
+                result.onSuccess { _questions.value = it }
             }
         }
     }
@@ -455,6 +474,84 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _message.value = UiMessage("삭제 실패: ${e.localizedMessage}", true)
             }
         }
+    }
+
+    // ── 질의응답 ────────────────────────────────────────────────
+    /**
+     * 실명제. 관리자는 이름만 남기고 사번은 비운다(관리자 계정에는 사번이 없다).
+     * 한 곳에 모아두지 않으면 질문과 답변의 작성자 표기가 어긋난다.
+     */
+    private fun questionAuthor(): Pair<String, String> =
+        if (_isAdmin.value) "관리자" to ""
+        else (_crewName.value ?: "이름 미등록") to (_crewEmpNo.value ?: "")
+
+    fun answersFlow(questionId: String): Flow<Result<List<Answer>>> =
+        questionRepo.answersFlow(questionId)
+
+    fun addQuestion(title: String, content: String, imageUris: List<Uri>, onSuccess: () -> Unit) {
+        if (title.isBlank() || content.isBlank()) {
+            _message.value = UiMessage("제목과 내용을 입력해주세요", true)
+            return
+        }
+        val (name, empNo) = questionAuthor()
+        viewModelScope.launch {
+            try {
+                _isUploading.value = true
+                // 사진 업로드는 게시물과 같은 경로를 쓴다 (축소·EXIF 처리가 거기 들어 있다)
+                val uploaded = imageUris.take(QuestionRepository.MAX_IMAGES).map { uri ->
+                    val (fileName, size) = fileInfo(uri)
+                    repo.uploadAttachment(appContext, uri, fileName, mimeOf(uri), size)
+                }
+                questionRepo.addQuestion(title, content, name, empNo, uploaded, emptyList())
+                _message.value = UiMessage("질문이 등록되었습니다")
+                onSuccess()
+            } catch (e: Exception) {
+                _message.value = UiMessage("등록 실패: ${e.localizedMessage}", true)
+            } finally {
+                _isUploading.value = false
+            }
+        }
+    }
+
+    fun addAnswer(questionId: String, content: String, onSuccess: () -> Unit) {
+        if (content.isBlank()) return
+        val (name, empNo) = questionAuthor()
+        viewModelScope.launch {
+            try {
+                questionRepo.addAnswer(questionId, content, name, empNo, _isAdmin.value)
+                onSuccess()
+            } catch (e: Exception) {
+                _message.value = UiMessage("답변 등록 실패: ${e.localizedMessage}", true)
+            }
+        }
+    }
+
+    fun deleteQuestion(id: String, onSuccess: () -> Unit) {
+        if (!_isAdmin.value) return
+        viewModelScope.launch {
+            try {
+                questionRepo.deleteQuestion(id)
+                _message.value = UiMessage("질문을 삭제했습니다")
+                onSuccess()
+            } catch (e: Exception) {
+                _message.value = UiMessage("삭제 실패: ${e.localizedMessage}", true)
+            }
+        }
+    }
+
+    fun deleteAnswer(questionId: String, answerId: String) {
+        if (!_isAdmin.value) return
+        viewModelScope.launch {
+            try {
+                questionRepo.deleteAnswer(questionId, answerId)
+            } catch (e: Exception) {
+                _message.value = UiMessage("삭제 실패: ${e.localizedMessage}", true)
+            }
+        }
+    }
+
+    fun viewQuestion(id: String) {
+        viewModelScope.launch { questionRepo.incrementViews(id) }
     }
 
     companion object {

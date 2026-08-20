@@ -30,6 +30,9 @@ import com.sinjeong.safety.ui.screens.SettingsScreen
 import com.sinjeong.safety.ui.screens.DetailScreen
 import com.sinjeong.safety.ui.screens.HomeScreen
 import com.sinjeong.safety.ui.screens.LoginScreen
+import com.sinjeong.safety.ui.screens.QuestionDetailScreen
+import com.sinjeong.safety.ui.screens.QuestionListScreen
+import com.sinjeong.safety.ui.screens.QuestionWriteScreen
 import com.sinjeong.safety.ui.screens.RegulationAskScreen
 import com.sinjeong.safety.ui.screens.RegulationScreen
 import com.sinjeong.safety.ui.screens.WriteScreen
@@ -46,6 +49,10 @@ object Routes {
     const val REGULATION = "regulation"
     const val REG_ASK = "reg_ask"             // 규정에 물어보기 (기기 안 검색)
     const val CONFIRMS = "confirms/{postId}"  // 확인 현황 (관리자)
+    const val QUESTIONS = "questions"                // 질의응답 목록
+    const val QUESTION_WRITE = "question_write"      // 질문 작성
+    const val QUESTION_DETAIL = "question/{questionId}"
+    fun question(id: String) = "question/$id"
     fun detail(id: String) = "detail/$id"
     fun edit(id: String) = "write/$id"
     fun confirms(id: String) = "confirms/$id"
@@ -109,6 +116,7 @@ class MainActivity : ComponentActivity() {
                                     onWriteClick = { nav.navigate(Routes.WRITE) },
                                     onRegulationClick = { nav.navigate(Routes.REGULATION) },
                                     onAskClick = { nav.navigate(Routes.REG_ASK) },
+                                    onQuestionsClick = { nav.navigate(Routes.QUESTIONS) },
                                     onSettingsClick = { nav.navigate(Routes.SETTINGS) }
                                 )
                             }
@@ -167,6 +175,40 @@ class MainActivity : ComponentActivity() {
                             composable(Routes.CONFIRMS) { backStackEntry ->
                                 val postId = backStackEntry.arguments?.getString("postId") ?: return@composable
                                 ConfirmStatusScreen(vm = vm, postId = postId, onBack = { nav.popBackStack() })
+                            }
+
+                            // 승무원 로그인은 게이트로만 쓰였는데, 질의응답에서
+                            // "로그인하면 …" 안내를 누르면 여기로 보내야 해서 목적지로도 등록한다.
+                            composable(Routes.CREW_LOGIN) {
+                                CrewLoginScreen(
+                                    vm = vm,
+                                    onSuccess = { nav.popBackStack() },
+                                    onAdminClick = { nav.navigate(Routes.LOGIN) }
+                                )
+                            }
+
+                            composable(Routes.QUESTIONS) {
+                                QuestionListScreen(
+                                    vm = vm,
+                                    onBack = { nav.popBackStack() },
+                                    onQuestionClick = { id -> nav.navigate(Routes.question(id)) },
+                                    onWriteClick = { nav.navigate(Routes.QUESTION_WRITE) },
+                                    onLoginClick = { nav.navigate(Routes.CREW_LOGIN) }
+                                )
+                            }
+
+                            composable(Routes.QUESTION_WRITE) {
+                                QuestionWriteScreen(vm = vm, onBack = { nav.popBackStack() })
+                            }
+
+                            composable(Routes.QUESTION_DETAIL) { backStackEntry ->
+                                val qid = backStackEntry.arguments?.getString("questionId") ?: return@composable
+                                QuestionDetailScreen(
+                                    vm = vm,
+                                    questionId = qid,
+                                    onBack = { nav.popBackStack() },
+                                    onLoginClick = { nav.navigate(Routes.CREW_LOGIN) }
+                                )
                             }
                         }
                       }

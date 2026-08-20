@@ -98,6 +98,7 @@ fun HomeScreen(
     onWriteClick: () -> Unit,
     onRegulationClick: () -> Unit,
     onAskClick: () -> Unit,
+    onQuestionsClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
     val posts by vm.filteredPosts.collectAsState()
@@ -179,6 +180,14 @@ fun HomeScreen(
             item {
                 AskEntryBanner(
                     onClick = onAskClick,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                )
+            }
+
+            // 질의응답 (규정에 물어보기 바로 아래 — 물어볼 곳 두 개를 붙여 둔다)
+            item {
+                QuestionEntryBanner(
+                    onClick = onQuestionsClick,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                 )
             }
