@@ -2,6 +2,7 @@ package com.sinjeong.safety.ui.screens
 
 import android.content.Intent
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -88,6 +89,19 @@ fun RegulationScreen(onBack: () -> Unit, onAsk: () -> Unit = {}) {
         }
     }
 
+    // 한 단계 뒤로: 조문상세 → 조문목록 → 규정집목록 → 화면 닫기
+    // 화면 안 ← 버튼과 폰 시스템 뒤로가기가 똑같이 이 동작을 쓴다
+    val stepBack: () -> Unit = {
+        when {
+            selectedArticle != null -> { selectedArticle = null; selectedFun = null; highlightTerm = "" }
+            selectedBook != null -> selectedBook = null
+            else -> onBack()
+        }
+    }
+    // 첫 단계(규정집 목록)에서는 꺼 둔다.
+    // 꺼야 시스템 기본 동작(NavHost가 화면 닫기 + predictive back 미리보기)이 그대로 산다.
+    BackHandler(enabled = selectedArticle != null || selectedBook != null) { stepBack() }
+
     val title = when {
         selectedArticle != null -> "조문"
         selectedBook != null -> selectedBook!!.name
@@ -100,13 +114,7 @@ fun RegulationScreen(onBack: () -> Unit, onAsk: () -> Unit = {}) {
             TopAppBar(
                 title = { Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
                 navigationIcon = {
-                    IconButton(onClick = {
-                        when {
-                            selectedArticle != null -> { selectedArticle = null; selectedFun = null; highlightTerm = "" }
-                            selectedBook != null -> selectedBook = null
-                            else -> onBack()
-                        }
-                    }) {
+                    IconButton(onClick = stepBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로", tint = AppColors.TextPrimary)
                     }
                 },
