@@ -71,6 +71,25 @@ data class Post(
 val Post.effectiveDate: Timestamp?
     get() = docDate ?: createdAt
 
+/**
+ * 확인 기록 1건.  posts/{postId}/confirms/{사번}  문서.
+ * 옛 버전은 인원 수(Post.confirms)만 세었으므로 그 시절 기록에는 사람이 없다.
+ */
+data class CrewConfirm(
+    val empNo: String = "",
+    val name: String = "",
+    val at: Timestamp? = null
+)
+
+/** 확인 현황 화면에 뿌릴 집계. */
+data class ConfirmReport(
+    val confirmed: List<CrewConfirm> = emptyList(),  // 확인한 사람 (최근 순)
+    val pending: List<CrewConfirm> = emptyList(),    // 아직 안 본 사람 (사번 순)
+    val anonymous: Long = 0                          // 이름 없이 수만 센 옛 기록
+) {
+    val total: Int get() = confirmed.size + pending.size
+}
+
 object Categories {
     const val HUMAN_ERROR = "인적오류 주의개소"
     const val EDU_VIDEO = "교육영상"

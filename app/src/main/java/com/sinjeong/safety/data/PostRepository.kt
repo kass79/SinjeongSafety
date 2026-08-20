@@ -212,10 +212,35 @@ class PostRepository {
         postsRef.document(id).update("pinned", pinned).await()
     }
 
-    /** 확인(읽음) 인원 +1 — 로그인 없이 가능 (규칙에서 confirms +1만 허용) */
-    suspend fun confirmRead(id: String) {
+    /**
+     * 확인(읽음) 처리. 인원 수를 +1 하고, 로그인한 승무원이면 누가 봤는지도 남긴다.
+     * 사람 기록이 있어야 관리자가 "누가 아직 안 봤는지"를 볼 수 있다.
+     * 문서 id를 사번으로 두어 같은 사람이 폰을 바꿔 눌러도 한 줄만 남는다.
+     */
+    suspend fun confirmRead(id: String, empNo: String? = null, name: String? = null) {
         postsRef.document(id).update("confirms", FieldValue.increment(1)).await()
+        if (empNo.isNullOrBlank()) return
+        runCatching {
+            postsRef.document(id).collection("confirms").document(empNo).set(
+                mapOf(
+                    "empNo" to empNo,
+                    "name" to (name?.trim() ?: ""),
+                    "at" to FieldValue.serverTimestamp()
+                )
+            ).await()
+        }
     }
+
+    /** 그 글을 확인한 사람들 (최근 순). 읽기 실패하면 빈 목록. */
+    suspend fun loadConfirms(postId: String): List<CrewConfirm> = runCatching {
+        postsRef.document(postId).collection("confirms").get().await().documents.map { d ->
+            CrewConfirm(
+                empNo = d.id,
+                name = d.getString("name")?.trim().orEmpty(),
+                at = d.getTimestamp("at")
+            )
+        }.sortedByDescending { it.at?.seconds ?: 0L }
+    }.getOrDefault(emptyList())
 
     suspend fun deletePost(id: String) {
         auth.currentUser ?: throw IllegalStateException("관리자 로그인이 필요합니다")

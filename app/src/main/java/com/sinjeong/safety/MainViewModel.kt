@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.sinjeong.safety.data.Attachment
+import com.sinjeong.safety.data.ConfirmReport
+import com.sinjeong.safety.data.CrewConfirm
 import com.sinjeong.safety.data.LinkAttachment
 import com.sinjeong.safety.data.Post
 import com.sinjeong.safety.data.effectiveDate
@@ -227,7 +229,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val updated = _confirmedIds.value + postId
         _confirmedIds.value = updated
         prefs.edit().putStringSet("confirmed_ids", updated).apply()
-        viewModelScope.launch { runCatching { repo.confirmRead(postId) } }
+        val empNo = _crewEmpNo.value
+        val name = _crewName.value
+        viewModelScope.launch { runCatching { repo.confirmRead(postId, empNo, name) } }
+    }
+
+    /**
+     * 확인 현황(관리자용). 명단 전체에서 확인한 사람을 빼면 아직 안 본 사람이 된다.
+     * 이름은 등록할 때 받은 것만 있으므로 없는 사람은 화면에서 사번으로 표시한다.
+     * 옛 버전은 사람 없이 수만 세었으므로 그 차이를 anonymous로 따로 알려 준다.
+     */
+    fun loadConfirmReport(postId: String, onResult: (ConfirmReport) -> Unit) {
+        viewModelScope.launch {
+            val confirmed = repo.loadConfirms(postId)
+            val roster = runCatching { crewRepo.effectiveRoster(appContext) }.getOrDefault(emptySet())
+            val names = crewRepo.allNames()
+            val done = confirmed.map { it.empNo }.toSet()
+            val pending = (roster - done).sorted()
+                .map { CrewConfirm(empNo = it, name = names[it].orEmpty()) }
+            val counted = _posts.value.firstOrNull { it.id == postId }?.confirms ?: 0L
+            onResult(
+                ConfirmReport(
+                    confirmed = confirmed.map { c ->
+                        if (c.name.isBlank()) c.copy(name = names[c.empNo].orEmpty()) else c
+                    },
+                    pending = pending,
+                    anonymous = (counted - confirmed.size).coerceAtLeast(0L)
+                )
+            )
+        }
     }
 
     fun togglePin(postId: String, pinned: Boolean) {

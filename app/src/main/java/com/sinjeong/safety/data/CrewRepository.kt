@@ -46,8 +46,7 @@ class CrewRepository {
      *   removedIds: 나간 사람 (제외)
      * 서버를 못 읽으면 앱에 든 기본 명단만으로 판단한다.
      */
-    suspend fun isInRoster(context: Context, empNo: String): Boolean {
-        val no = empNo.trim()
+    suspend fun effectiveRoster(context: Context): Set<String> {
         val base = loadRoster(context)
 
         val doc = runCatching {
@@ -59,9 +58,23 @@ class CrewRepository {
         val removed = (doc?.get("removedIds") as? List<*>)
             ?.mapNotNull { it?.toString()?.trim() }?.toSet() ?: emptySet()
 
-        if (removed.contains(no)) return false
-        return base.contains(no) || extra.contains(no)
+        return (base + extra) - removed
     }
+
+    suspend fun isInRoster(context: Context, empNo: String): Boolean =
+        effectiveRoster(context).contains(empNo.trim())
+
+    /**
+     * 사번 → 이름. 등록하면서 이름을 남긴 사람만 들어 있다.
+     * 보안 규칙상 관리자만 crew 컬렉션 전체를 읽을 수 있으므로,
+     * 승무원이 부르면 빈 값이 돌아온다(확인 현황은 관리자 화면이다).
+     */
+    suspend fun allNames(): Map<String, String> = runCatching {
+        crewRef.get().await().documents.mapNotNull { d ->
+            val n = d.getString("name")?.trim()
+            if (n.isNullOrBlank()) null else d.id to n
+        }.toMap()
+    }.getOrDefault(emptyMap())
 
     // ── 계정 상태 ────────────────────────────────────────────────
     private fun emailOf(empNo: String) = "${empNo.trim()}@$CREW_DOMAIN"

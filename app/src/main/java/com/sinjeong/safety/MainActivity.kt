@@ -24,6 +24,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.sinjeong.safety.ui.screens.ConfirmStatusScreen
 import com.sinjeong.safety.ui.screens.CrewLoginScreen
 import com.sinjeong.safety.ui.screens.SettingsScreen
 import com.sinjeong.safety.ui.screens.DetailScreen
@@ -44,8 +45,10 @@ object Routes {
     const val DETAIL = "detail/{postId}"
     const val REGULATION = "regulation"
     const val REG_ASK = "reg_ask"             // 규정에 물어보기 (기기 안 검색)
+    const val CONFIRMS = "confirms/{postId}"  // 확인 현황 (관리자)
     fun detail(id: String) = "detail/$id"
     fun edit(id: String) = "write/$id"
+    fun confirms(id: String) = "confirms/$id"
 }
 
 class MainActivity : ComponentActivity() {
@@ -156,8 +159,14 @@ class MainActivity : ComponentActivity() {
                                     vm = vm,
                                     postId = postId,
                                     onBack = { nav.popBackStack() },
-                                    onEdit = { id -> nav.navigate(Routes.edit(id)) }
+                                    onEdit = { id -> nav.navigate(Routes.edit(id)) },
+                                    onConfirmStatus = { id -> nav.navigate(Routes.confirms(id)) }
                                 )
+                            }
+
+                            composable(Routes.CONFIRMS) { backStackEntry ->
+                                val postId = backStackEntry.arguments?.getString("postId") ?: return@composable
+                                ConfirmStatusScreen(vm = vm, postId = postId, onBack = { nav.popBackStack() })
                             }
                         }
                       }

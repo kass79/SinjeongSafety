@@ -56,7 +56,8 @@ fun DetailScreen(
     vm: MainViewModel,
     postId: String,
     onBack: () -> Unit,
-    onEdit: (String) -> Unit
+    onEdit: (String) -> Unit,
+    onConfirmStatus: (String) -> Unit
 ) {
     val posts by vm.posts.collectAsState()
     val post = posts.find { it.id == postId }
@@ -235,10 +236,21 @@ fun DetailScreen(
                             )
                         }
                         Spacer(Modifier.width(10.dp))
-                        Text(
-                            "${post.confirms}명 확인",
-                            fontSize = 12.sp, color = AppColors.TextSecondary
-                        )
+                        // 관리자만 눌러서 "누가 아직 안 봤는지" 현황으로 들어간다.
+                        if (isAdmin) {
+                            Text(
+                                "${post.confirms}명 확인 ›",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AppColors.Primary,
+                                modifier = Modifier.clickable { onConfirmStatus(postId) }
+                            )
+                        } else {
+                            Text(
+                                "${post.confirms}명 확인",
+                                fontSize = 12.sp, color = AppColors.TextSecondary
+                            )
+                        }
                     }
                 }
             }
