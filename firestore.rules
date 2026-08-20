@@ -97,6 +97,12 @@ service cloud.firestore {
       }
     }
 
+    // 출무점호. 매일 관리자가 올리고 전 직원이 읽는다. 문서 id는 yyyyMMdd.
+    match /briefings/{dateId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // 로그인 강제 스위치. 앱은 읽기만 하고, 값 변경은 콘솔에서 한다.
     match /config/{docId} {
       allow read: if true;

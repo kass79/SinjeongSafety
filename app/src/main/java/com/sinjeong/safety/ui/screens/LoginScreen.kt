@@ -17,6 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -36,6 +38,12 @@ fun LoginScreen(vm: MainViewModel, onBack: () -> Unit, onSuccess: () -> Unit) {
     var showPassword by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
 
+    // 승무원 로그인 화면과 같은 처리 — 키보드가 떴거나 세로가 짧으면
+    // 상단 마스코트·여백을 걷어내 아이디·비밀번호 칸을 위로 끌어올린다
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val shortScreen = LocalConfiguration.current.screenHeightDp < 640
+    val compactTop = imeVisible || shortScreen
+
     Scaffold(
         containerColor = AppColors.Background,
         topBar = {
@@ -54,24 +62,26 @@ fun LoginScreen(vm: MainViewModel, onBack: () -> Unit, onSuccess: () -> Unit) {
             Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // 키보드가 입력칸을 가리지 않도록 스크롤 앞에서 인셋을 준다
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(32.dp))
-            Image(
+            Spacer(Modifier.height(if (compactTop) 12.dp else 32.dp))
+            if (!compactTop) Image(
                 painter = painterResource(R.drawable.mascot_hello),
                 contentDescription = null,
                 modifier = Modifier.size(110.dp)
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(if (compactTop) 6.dp else 12.dp))
             Text("관리자 인증", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = AppColors.Primary)
             Text(
                 "글 작성·수정·삭제는 관리자만 가능합니다",
                 fontSize = 13.sp,
                 color = AppColors.TextSecondary
             )
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(if (compactTop) 14.dp else 28.dp))
 
             OutlinedTextField(
                 value = id,

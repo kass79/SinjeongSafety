@@ -15,6 +15,8 @@ import com.sinjeong.safety.data.effectiveDate
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.messaging.FirebaseMessaging
 import com.sinjeong.safety.data.Answer
+import com.sinjeong.safety.data.Briefing
+import com.sinjeong.safety.data.BriefingRepository
 import com.sinjeong.safety.data.CrewRepository
 import com.sinjeong.safety.data.Question
 import com.sinjeong.safety.data.QuestionRepository
@@ -39,6 +41,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = PostRepository()
     private val crewRepo = CrewRepository()
     private val questionRepo = QuestionRepository()
+    private val briefingRepo = BriefingRepository()
     private val appContext: Context = app.applicationContext
     private val prefs = app.getSharedPreferences("safety_prefs", Context.MODE_PRIVATE)
 
@@ -49,6 +52,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // 질의응답 목록 (최신순 — 저장소가 이미 정렬해서 준다)
     private val _questions = MutableStateFlow<List<Question>>(emptyList())
     val questions: StateFlow<List<Question>> = _questions.asStateFlow()
+
+    // 출무점호 목록 (최신 날짜부터 — 저장소가 문서 id 순으로 정렬해서 준다).
+    // 화면에서는 첫 번째가 곧 최신 한 건이므로 '오늘 것' 필드는 따로 두지 않는다.
+    private val _briefings = MutableStateFlow<List<Briefing>>(emptyList())
+    val briefings: StateFlow<List<Briefing>> = _briefings.asStateFlow()
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -230,6 +238,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             questionRepo.questionsFlow().collect { result ->
                 result.onSuccess { _questions.value = it }
+            }
+        }
+        // 출무점호도 마찬가지 — 못 읽으면 홈 카드가 안 보일 뿐이다.
+        viewModelScope.launch {
+            briefingRepo.briefingsFlow().collect { result ->
+                result.onSuccess { _briefings.value = it }
             }
         }
     }
@@ -552,6 +566,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 questionRepo.deleteAnswer(questionId, answerId)
+            } catch (e: Exception) {
+                _message.value = UiMessage("삭제 실패: ${e.localizedMessage}", true)
+            }
+        }
+    }
+
+    // ── 출무점호 ────────────────────────────────────────────────
+    fun saveBriefing(raw: String, onSuccess: () -> Unit) {
+        if (!_isAdmin.value) return
+        viewModelScope.launch {
+            try {
+                briefingRepo.save(raw)
+                _message.value = UiMessage("출무점호를 등록했습니다")
+                onSuccess()
+            } catch (e: Exception) {
+                _message.value = UiMessage("등록 실패: ${e.localizedMessage}", true)
+            }
+        }
+    }
+
+    fun deleteBriefing(id: String, onSuccess: () -> Unit) {
+        if (!_isAdmin.value) return
+        viewModelScope.launch {
+            try {
+                briefingRepo.delete(id)
+                _message.value = UiMessage("출무점호를 삭제했습니다")
+                onSuccess()
             } catch (e: Exception) {
                 _message.value = UiMessage("삭제 실패: ${e.localizedMessage}", true)
             }

@@ -24,11 +24,13 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.AdminPanelSettings
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,6 +48,7 @@ import androidx.compose.material.icons.filled.AttachFile
 import coil.compose.AsyncImage
 import com.sinjeong.safety.MainViewModel
 import com.sinjeong.safety.R
+import com.sinjeong.safety.data.Briefing
 import com.sinjeong.safety.data.Categories
 import com.sinjeong.safety.data.Post
 import com.sinjeong.safety.data.effectiveDate
@@ -95,9 +98,12 @@ fun HomeScreen(
     onWriteClick: () -> Unit,
     onRegulationClick: () -> Unit,
     onQuestionsClick: () -> Unit,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    onBriefingWrite: () -> Unit,
+    onBriefingList: () -> Unit
 ) {
     val posts by vm.filteredPosts.collectAsState()
+    val briefings by vm.briefings.collectAsState()
     // 아카이브 목록도 여기서 구독한다. LazyColumn 안에서는 collectAsState를 쓸 수 없다.
     val archiveYears by vm.archive.collectAsState()
     val isLoading by vm.isLoading.collectAsState()
@@ -115,10 +121,10 @@ fun HomeScreen(
     var expandedKeys by remember { mutableStateOf(setOf<String>()) }
 
     // 전환 버튼이 목록 아래에 있으므로, 누르면 결과가 시작되는 위치로 올려준다.
-    // 목록 앞에 놓인 고정 항목 수다 — 헤더·마스코트·검색·카테고리·즐겨찾기칩 다섯.
+    // 목록 앞에 놓인 고정 항목 수다 — 헤더·마스코트·검색·카테고리·출무점호·즐겨찾기칩 여섯.
     // 위에 item을 하나 더 끼우면 이 숫자도 같이 올려야 엉뚱한 데로 스크롤되지 않는다.
     LaunchedEffect(showArchive) {
-        listState.animateScrollToItem(if (showArchive) 5 else 0)
+        listState.animateScrollToItem(if (showArchive) 6 else 0)
     }
 
     Scaffold(
@@ -168,6 +174,16 @@ fun HomeScreen(
                     },
                     onSelectAll = vm::selectAll,
                     onQuestions = onQuestionsClick
+                )
+            }
+
+            // 출무점호 — 출근해서 제일 먼저 볼 것이므로 카테고리 바로 아래.
+            item {
+                BriefingCard(
+                    briefing = briefings.firstOrNull(),
+                    isAdmin = isAdmin,
+                    onWrite = onBriefingWrite,
+                    onList = onBriefingList
                 )
             }
 
@@ -268,6 +284,11 @@ private fun HeaderBar(
     onShieldClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
+    // 폴드7 접은 화면(약 344dp)에서는 오른쪽 아이콘 4개가 190dp 넘게 먹어
+    // 제목에 남는 폭이 거의 없다. 좁으면 마스코트·글자·간격을 한 단계씩 줄인다.
+    val narrow = LocalConfiguration.current.screenWidthDp < 380
+    val iconGap = if (narrow) 5.dp else 8.dp
+
     Row(
         Modifier
             .fillMaxWidth()
@@ -279,18 +300,21 @@ private fun HeaderBar(
             contentDescription = "마스코트",
             contentScale = ContentScale.Crop,
             modifier = Modifier
-                .size(48.dp)
+                .size(if (narrow) 40.dp else 48.dp)
                 .clip(RoundedCornerShape(15.dp))
                 .background(Color(0xFFE8F0FC))
                 .border(2.dp, Color.White, RoundedCornerShape(15.dp))
         )
-        Spacer(Modifier.width(11.dp))
+        Spacer(Modifier.width(if (narrow) 7.dp else 11.dp))
         Column(Modifier.weight(1f)) {
+            // maxLines 없이 두면 폭이 모자랄 때 제목이 세 줄까지 늘어나 헤더가 화면을 먹는다
             Text(
                 "신정승무사업소",
-                fontSize = 19.sp,
+                fontSize = if (narrow) 15.sp else 19.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = AppColors.Primary
+                color = AppColors.Primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -301,15 +325,21 @@ private fun HeaderBar(
                 )
                 Spacer(Modifier.width(5.dp))
                 Text(
-                    if (isAdmin) "관리자님 (관리자 모드)" else "실시간 안전정보 공유중",
+                    if (narrow) {
+                        if (isAdmin) "관리자 모드" else "안전정보 공유중"
+                    } else {
+                        if (isAdmin) "관리자님 (관리자 모드)" else "실시간 안전정보 공유중"
+                    },
                     fontSize = 12.sp,
-                    color = AppColors.TextSecondary
+                    color = AppColors.TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
         // 캘린더 아이콘 → 신정승무캘린더 앱 열기
         CalendarButton()
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(iconGap))
 
         // 날씨 칩 — 다음(daum) 날씨 위젯처럼 아이콘+기온만 작게.
         // 특보가 있으면 그 위에 작은 주황 뱃지가 한 줄 붙는다(맥박 애니메이션은 뺐다.
@@ -356,7 +386,7 @@ private fun HeaderBar(
                 )
             }
         }
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(iconGap))
 
         if (showWeatherDialog) {
             AlertDialog(
@@ -397,7 +427,7 @@ private fun HeaderBar(
                 )
             }
         }
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(iconGap))
 
         // 방패 아이콘 → 관리자 로그인 / 로그아웃
         Surface(
@@ -959,6 +989,152 @@ private fun ArchiveRow(post: Post, isNew: Boolean, onClick: () -> Unit) {
                 } ?: "",
                 fontSize = 11.sp, color = AppColors.TextHint
             )
+        }
+    }
+}
+
+/** 출무점호 항목 글자색. 원본 한글 문서가 빨간 글씨라 그 느낌을 그대로 살린다. */
+private val BriefingRed = Color(0xFFD32F2F)
+
+/**
+ * 출무점호 카드. 홈에서는 최신 한 건을, 작성 화면에서는 미리보기로 같은 모양을 쓴다.
+ *
+ * 오늘 것이 아니어도 최신 것을 보여주고 날짜 줄을 그대로 띄운다 — 언제 것인지
+ * 모른 채 지적사항만 보는 게 더 위험하기 때문이다.
+ *
+ * @param onList null이면 미리보기라 '지난 점호 보기' 줄을 달지 않는다.
+ * @param collapseLimit 이 수를 넘는 항목은 접는다. 미리보기는 전부 봐야 하므로 크게 넘긴다.
+ */
+@Composable
+fun BriefingCard(
+    briefing: Briefing?,
+    isAdmin: Boolean,
+    onWrite: () -> Unit,
+    onList: (() -> Unit)? = null,
+    collapseLimit: Int = 5
+) {
+    // 아직 한 건도 없을 때: 관리자에게만 올려달라고 하고, 승무원에게는 그리지 않는다
+    // (빈 카드가 자리만 먹는다).
+    if (briefing == null) {
+        if (!isAdmin) return
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = AppColors.Surface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .clickable(onClick = onWrite)
+        ) {
+            Row(
+                Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "오늘 출무점호를 올려주세요",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AppColors.Primary,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    Icons.Outlined.Edit,
+                    contentDescription = "출무점호 올리기",
+                    tint = AppColors.Primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+        return
+    }
+
+    var expanded by remember { mutableStateOf(false) }
+    val hidden = (briefing.items.size - collapseLimit).coerceAtLeast(0)
+    val shown = if (expanded || hidden == 0) briefing.items else briefing.items.take(collapseLimit)
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = AppColors.Surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "출무점호",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = AppColors.Primary
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    briefing.dateText,
+                    fontSize = 13.sp,
+                    color = AppColors.TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (isAdmin) {
+                    Icon(
+                        Icons.Outlined.Edit,
+                        contentDescription = "출무점호 올리기",
+                        tint = AppColors.Primary,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable(onClick = onWrite)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            shown.forEach { line ->
+                Row(Modifier.padding(bottom = 3.dp)) {
+                    Text("•", fontSize = 14.sp, lineHeight = 20.sp, color = BriefingRed)
+                    Spacer(Modifier.width(6.dp))
+                    Text(line, fontSize = 14.sp, lineHeight = 20.sp, color = BriefingRed)
+                }
+            }
+
+            if (hidden > 0) {
+                Text(
+                    if (expanded) "접기" else "+${hidden}개 더 보기",
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AppColors.Primary,
+                    modifier = Modifier
+                        .clickable { expanded = !expanded }
+                        .padding(top = 4.dp, bottom = 2.dp)
+                )
+            }
+
+            if (briefing.footer.isNotBlank()) {
+                Spacer(Modifier.height(9.dp))
+                HorizontalDivider(color = AppColors.Divider)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    briefing.footer,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AppColors.Primary
+                )
+            }
+
+            if (onList != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "지난 점호 보기 ›",
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AppColors.TextSecondary,
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .clickable(onClick = onList)
+                        .padding(horizontal = 2.dp, vertical = 2.dp)
+                )
+            }
         }
     }
 }

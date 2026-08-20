@@ -24,6 +24,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.sinjeong.safety.ui.screens.BriefingListScreen
+import com.sinjeong.safety.ui.screens.BriefingWriteScreen
 import com.sinjeong.safety.ui.screens.ConfirmStatusScreen
 import com.sinjeong.safety.ui.screens.CrewLoginScreen
 import com.sinjeong.safety.ui.screens.SettingsScreen
@@ -52,6 +54,8 @@ object Routes {
     const val QUESTIONS = "questions"                // 질의응답 목록
     const val QUESTION_WRITE = "question_write"      // 질문 작성
     const val QUESTION_DETAIL = "question/{questionId}"
+    const val BRIEFING_WRITE = "briefing_write"      // 출무점호 올리기 (관리자)
+    const val BRIEFINGS = "briefings"                // 지난 출무점호
     fun question(id: String) = "question/$id"
     fun detail(id: String) = "detail/$id"
     fun edit(id: String) = "write/$id"
@@ -116,7 +120,9 @@ class MainActivity : ComponentActivity() {
                                     onWriteClick = { nav.navigate(Routes.WRITE) },
                                     onRegulationClick = { nav.navigate(Routes.REGULATION) },
                                     onQuestionsClick = { nav.navigate(Routes.QUESTIONS) },
-                                    onSettingsClick = { nav.navigate(Routes.SETTINGS) }
+                                    onSettingsClick = { nav.navigate(Routes.SETTINGS) },
+                                    onBriefingWrite = { nav.navigate(Routes.BRIEFING_WRITE) },
+                                    onBriefingList = { nav.navigate(Routes.BRIEFINGS) }
                                 )
                             }
 
@@ -184,6 +190,14 @@ class MainActivity : ComponentActivity() {
                                     onSuccess = { nav.popBackStack() },
                                     onAdminClick = { nav.navigate(Routes.LOGIN) }
                                 )
+                            }
+
+                            composable(Routes.BRIEFING_WRITE) {
+                                BriefingWriteScreen(vm = vm, onBack = { nav.popBackStack() })
+                            }
+
+                            composable(Routes.BRIEFINGS) {
+                                BriefingListScreen(vm = vm, onBack = { nav.popBackStack() })
                             }
 
                             composable(Routes.QUESTIONS) {
