@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Search
@@ -93,7 +94,6 @@ fun HomeScreen(
     onLoginClick: () -> Unit,
     onWriteClick: () -> Unit,
     onRegulationClick: () -> Unit,
-    onAskClick: () -> Unit,
     onQuestionsClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
@@ -115,10 +115,10 @@ fun HomeScreen(
     var expandedKeys by remember { mutableStateOf(setOf<String>()) }
 
     // 전환 버튼이 목록 아래에 있으므로, 누르면 결과가 시작되는 위치로 올려준다.
-    // 목록 앞에 놓인 고정 항목 수다 — 헤더·마스코트·검색·카테고리·규정물어보기·질의응답.
+    // 목록 앞에 놓인 고정 항목 수다 — 헤더·마스코트·검색·카테고리·즐겨찾기칩 다섯.
     // 위에 item을 하나 더 끼우면 이 숫자도 같이 올려야 엉뚱한 데로 스크롤되지 않는다.
     LaunchedEffect(showArchive) {
-        listState.animateScrollToItem(if (showArchive) 6 else 0)
+        listState.animateScrollToItem(if (showArchive) 5 else 0)
     }
 
     Scaffold(
@@ -166,25 +166,13 @@ fun HomeScreen(
                         if (cat == Categories.REGULATION) onRegulationClick()
                         else vm.toggleCategory(cat)
                     },
-                    onSelectAll = vm::selectAll
+                    onSelectAll = vm::selectAll,
+                    onQuestions = onQuestionsClick
                 )
             }
 
-            // 규정에 물어보기 (게시글 검색바와 헷갈리지 않게 카테고리 아래에 둔다)
-            item {
-                AskEntryBanner(
-                    onClick = onAskClick,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                )
-            }
-
-            // 질의응답 (규정에 물어보기 바로 아래 — 물어볼 곳 두 개를 붙여 둔다)
-            item {
-                QuestionEntryBanner(
-                    onClick = onQuestionsClick,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                )
-            }
+            // 규정에 물어보기 배너는 뺐다 — 운전규정 화면 안에 이미 같은 입구가 있어 중복이었다.
+            // 질의응답도 배너 대신 위 카테고리 줄의 다섯 번째 타일로 옮겼다.
 
             // 즐겨찾기만 모아 보기
             item {
@@ -474,16 +462,29 @@ private fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
     )
 }
 
-// ── 4개 카테고리 카드 ───────────────────────────────────────────
+// ── 카테고리 카드 ───────────────────────────────────────────────
 private data class CategoryUi(val name: String, val short: String, val icon: ImageVector, val color: Color)
 
+/**
+ * 질의응답 타일의 이름표. 게시물 분류(Categories)가 아니라 화면 이동이므로
+ * Categories 에 넣지 않는다 — 넣으면 필터 후보가 되어 빈 목록이 나온다.
+ * Categories 의 어떤 값과도 겹치지 않아 selected 비교에서 자동으로 탈락한다.
+ */
+private const val QNA_TILE = "__qna__"
+
 @Composable
-private fun CategoryRow(selected: String?, onToggle: (String) -> Unit, onSelectAll: () -> Unit) {
+private fun CategoryRow(
+    selected: String?,
+    onToggle: (String) -> Unit,
+    onSelectAll: () -> Unit,
+    onQuestions: () -> Unit
+) {
     val cats = listOf(
         CategoryUi(Categories.HUMAN_ERROR, "인적오류", Icons.Default.Warning, Color(0xFFF57C00)),
         CategoryUi(Categories.EDU_VIDEO, "교육영상", Icons.Default.PlayCircle, Color(0xFF1976D2)),
         CategoryUi(Categories.REGULATION, "운전규정", Icons.Default.MenuBook, Color(0xFF388E3C)),
-        CategoryUi(Categories.NOTICE, "전달사항", Icons.Default.Campaign, Color(0xFFC79A00))
+        CategoryUi(Categories.NOTICE, "전달사항", Icons.Default.Campaign, Color(0xFFC79A00)),
+        CategoryUi(QNA_TILE, "질의응답", Icons.Default.Forum, Color(0xFF7B1FA2))
     )
     Row(
         Modifier
@@ -529,26 +530,28 @@ private fun CategoryRow(selected: String?, onToggle: (String) -> Unit, onSelectA
                 ),
                 modifier = Modifier
                     .weight(1f)
-                    .clickable { onToggle(cat.name) }
+                    .clickable { if (cat.name == QNA_TILE) onQuestions() else onToggle(cat.name) }
             ) {
+                // 타일이 5개로 늘어 360dp 폭에서 한 칸이 50dp 아래로 떨어진다.
+                // 아이콘 박스·글자·좌우 여백을 한 단계씩 줄여야 "질의응답"이 한 줄에 들어간다.
                 Column(
-                    Modifier.padding(vertical = 10.dp, horizontal = 2.dp),
+                    Modifier.padding(vertical = 10.dp, horizontal = 1.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
                         Modifier
-                            .size(34.dp)
+                            .size(30.dp)
                             .clip(CircleShape)
                             .background(cat.color.copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(cat.icon, null, tint = cat.color, modifier = Modifier.size(19.dp))
+                        Icon(cat.icon, null, tint = cat.color, modifier = Modifier.size(17.dp))
                     }
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(5.dp))
                     Text(
                         cat.short,
-                        fontSize = 10.5.sp,
-                        lineHeight = 14.sp,
+                        fontSize = 9.5.sp,
+                        lineHeight = 12.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSelected) cat.color else AppColors.TextPrimary,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,

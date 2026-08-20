@@ -144,6 +144,13 @@ fun QuestionDetailScreen(
                                 fontSize = 12.5.sp,
                                 color = AppColors.TextHint
                             )
+                            Spacer(Modifier.width(6.dp))
+                            // 조회수 — 목록 카드와 같은 정보를 상세에서도 볼 수 있게
+                            Text(
+                                "조회 ${question?.views ?: 0}",
+                                fontSize = 12.5.sp,
+                                color = AppColors.TextHint
+                            )
                         }
                         Spacer(Modifier.height(14.dp))
                         Text(
@@ -177,6 +184,15 @@ fun QuestionDetailScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                     HorizontalDivider(color = AppColors.Divider)
+                    // 답변이 없으면 구분선 아래가 텅 비어 고장난 것처럼 보인다
+                    if (answers.isEmpty()) {
+                        Spacer(Modifier.height(14.dp))
+                        Text(
+                            "아직 답변이 없습니다. 아는 분이 답을 달아주세요.",
+                            fontSize = 13.sp,
+                            color = AppColors.TextSecondary
+                        )
+                    }
                 }
 
                 items(answers, key = { it.id }) { a ->
@@ -270,6 +286,9 @@ private fun AnswerRow(answer: Answer, canDelete: Boolean, onDelete: () -> Unit) 
             .fillMaxWidth()
             .padding(vertical = 6.dp)
     ) {
+        // 목록 카드와 같은 이니셜 배지 — 누가 쓴 글인지 훑어보기 쉽다
+        AuthorInitial(answer.authorName, admin = answer.isAdmin, size = 32)
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

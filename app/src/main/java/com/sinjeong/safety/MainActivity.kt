@@ -115,7 +115,6 @@ class MainActivity : ComponentActivity() {
                                     onLoginClick = { nav.navigate(Routes.LOGIN) },
                                     onWriteClick = { nav.navigate(Routes.WRITE) },
                                     onRegulationClick = { nav.navigate(Routes.REGULATION) },
-                                    onAskClick = { nav.navigate(Routes.REG_ASK) },
                                     onQuestionsClick = { nav.navigate(Routes.QUESTIONS) },
                                     onSettingsClick = { nav.navigate(Routes.SETTINGS) }
                                 )
