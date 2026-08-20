@@ -18,6 +18,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Print
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -32,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,6 +62,8 @@ fun ConfirmStatusScreen(vm: MainViewModel, postId: String, onBack: () -> Unit) {
 
     var showPending by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
+
     Surface(color = AppColors.Background, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
 
@@ -80,6 +85,32 @@ fun ConfirmStatusScreen(vm: MainViewModel, postId: String, onBack: () -> Unit) {
                 )
                 Spacer(Modifier.width(12.dp))
                 Text("확인 현황", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = AppColors.TextPrimary)
+
+                Spacer(Modifier.weight(1f))
+
+                // 명단을 다 받아 오기 전에는 회색으로 두고 눌러도 아무 일 없게 한다.
+                val ready = report
+                Icon(
+                    Icons.Outlined.Share,
+                    contentDescription = "엑셀로 내보내기",
+                    tint = if (ready == null) AppColors.TextHint else AppColors.Primary,
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clickable(enabled = ready != null) {
+                            if (ready != null) shareConfirmCsv(context, title.orEmpty(), ready)
+                        }
+                )
+                Spacer(Modifier.width(16.dp))
+                Icon(
+                    Icons.Outlined.Print,
+                    contentDescription = "인쇄 / PDF 저장",
+                    tint = if (ready == null) AppColors.TextHint else AppColors.Primary,
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clickable(enabled = ready != null) {
+                            if (ready != null) printConfirmRoster(context, title.orEmpty(), ready)
+                        }
+                )
             }
 
             val data = report
