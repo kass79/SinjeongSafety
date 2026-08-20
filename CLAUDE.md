@@ -41,6 +41,13 @@ anthropic-skills:sinjeong-safety-app 스킬에는 "사용자가 GitHub 웹에서
 
 ## 함정
 
+- **로컬 빌드 APK를 사용자에게 주면 안 됩니다.** `app/google-services.json` 은 git에 없고(추적 안 됨)
+  로컬 파일은 project_number·app_id가 전부 0, 키가 `AIzaSyDUMMYDUMMY` 인 **껍데기**입니다. 진짜는
+  GitHub Secrets `GOOGLE_SERVICES_JSON` 에만 있고 CI가 빌드할 때 복원합니다. 껍데기로 빌드해도 앱은
+  켜지고 Firestore 읽기도 되는데 **로그인만 "API key not valid" 로 실패**합니다. 실제로 v1.0.6~1.0.8을
+  이렇게 잘못 전달한 적이 있습니다. 전달용은 항상
+  `gh run download <runId> -n sinjeong-safety-debug-apk`. 로컬 빌드는 컴파일 검증 전용.
+
 - **윈도우 중복 다운로드 파일명(`이름 (2).kt`)이 커밋되면 Redeclaration으로 빌드 전체가 깨집니다.**
   한 번 사고 났었음(그때 (2) 쪽이 최신본인 경우도 있었으니 지우기 전에 diff 확인).
 - 채널·상단바: MainActivity Scaffold가 상태표시줄 여백을 이미 넣으므로 개별 화면에서 중복 padding 금지.
