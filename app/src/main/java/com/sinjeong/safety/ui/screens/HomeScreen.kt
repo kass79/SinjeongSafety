@@ -1,11 +1,6 @@
 package com.sinjeong.safety.ui.screens
 
 import androidx.compose.foundation.Image
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -54,6 +49,7 @@ import com.sinjeong.safety.data.Categories
 import com.sinjeong.safety.data.Post
 import com.sinjeong.safety.data.effectiveDate
 import com.sinjeong.safety.data.Tags
+import com.sinjeong.safety.data.WeatherNow
 import com.sinjeong.safety.ui.theme.AppColors
 import com.google.firebase.Timestamp
 import java.text.SimpleDateFormat
@@ -110,7 +106,7 @@ fun HomeScreen(
     val searchQuery by vm.searchQuery.collectAsState()
     val favoriteIds by vm.favoriteIds.collectAsState()
     val favoritesOnly by vm.showFavoritesOnly.collectAsState()
-    val weatherWarning by vm.weatherWarning.collectAsState()
+    val weather by vm.weather.collectAsState()
     val readIds by vm.readIds.collectAsState()
     val listState = rememberLazyListState()
     var showLogoutDialog by remember { mutableStateOf(false) }
@@ -119,9 +115,10 @@ fun HomeScreen(
     var expandedKeys by remember { mutableStateOf(setOf<String>()) }
 
     // 전환 버튼이 목록 아래에 있으므로, 누르면 결과가 시작되는 위치로 올려준다.
-    // (헤더·배너·검색·카테고리·규정물어보기 5개 다음이 목록의 첫 항목)
+    // 목록 앞에 놓인 고정 항목 수다 — 헤더·마스코트·검색·카테고리·규정물어보기·질의응답.
+    // 위에 item을 하나 더 끼우면 이 숫자도 같이 올려야 엉뚱한 데로 스크롤되지 않는다.
     LaunchedEffect(showArchive) {
-        listState.animateScrollToItem(if (showArchive) 5 else 0)
+        listState.animateScrollToItem(if (showArchive) 6 else 0)
     }
 
     Scaffold(
@@ -148,15 +145,12 @@ fun HomeScreen(
             item {
                 HeaderBar(
                     isAdmin = isAdmin,
-                    weatherWarning = weatherWarning,
+                    weather = weather,
                     onShieldClick = { if (isAdmin) showLogoutDialog = true else onLoginClick() },
                     onSettingsClick = onSettingsClick
                 )
             }
-            // 기상특보 발효 중이면 배지 (없으면 아무것도 안 보임)
-            weatherWarning?.let { warning ->
-                item { WeatherWarningBanner(warning) }
-            }
+            // 기상특보는 헤더의 날씨 칩 위 작은 뱃지로 붙는다(전체폭 배너는 자리를 너무 먹었다)
 
             item { MascotBanner() }
             item {
@@ -282,7 +276,7 @@ fun HomeScreen(
 @Composable
 private fun HeaderBar(
     isAdmin: Boolean,
-    weatherWarning: String?,
+    weather: WeatherNow?,
     onShieldClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
@@ -329,30 +323,49 @@ private fun HeaderBar(
         CalendarButton()
         Spacer(Modifier.width(8.dp))
 
-        // 날씨 아이콘 — 특보 발효 중이면 주황색으로 은은하게 맥박친다.
-        // 빠른 점멸은 매일 보는 화면에선 금방 피로해져 무시하게 되므로 쓰지 않는다.
+        // 날씨 칩 — 다음(daum) 날씨 위젯처럼 아이콘+기온만 작게.
+        // 특보가 있으면 그 위에 작은 주황 뱃지가 한 줄 붙는다(맥박 애니메이션은 뺐다.
+        // 칩이 작아지고 뱃지가 눈에 띄므로 움직임까지 얹을 값어치가 없다).
         var showWeatherDialog by remember { mutableStateOf(false) }
-        val warnActive = weatherWarning != null
-        val pulse = if (warnActive) {
-            val t = rememberInfiniteTransition(label = "weatherPulse")
-            t.animateFloat(
-                initialValue = 0.45f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(tween(1100), RepeatMode.Reverse),
-                label = "pulse"
-            ).value
-        } else 1f
-        Surface(
-            shape = CircleShape,
-            color = if (warnActive) Color(0xFFFF8A3D).copy(alpha = pulse * 0.28f) else Color.White,
-            border = androidx.compose.foundation.BorderStroke(
-                1.dp,
-                if (warnActive) Color(0xFFFF8A3D).copy(alpha = pulse) else AppColors.Divider
-            ),
-            modifier = Modifier.size(42.dp).clickable { showWeatherDialog = true }
+        val warning = weather?.warning
+        val warnActive = warning != null
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable { showWeatherDialog = true }
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(if (warnActive) "⚠️" else "⛅", fontSize = 19.sp)
+            if (warning != null) {
+                Text(
+                    warning,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF8A3D00),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        // 헤더 한 줄에 캘린더·설정·방패가 같이 있어 가로가 빠듯하다.
+                        // 특보가 둘 이상이면 길어지므로 폭을 묶고 말줄임한다.
+                        .widthIn(max = 64.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFFFFF1E6))
+                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                )
+                Spacer(Modifier.height(2.dp))
+            }
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = Color.White,
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (warnActive) Color(0xFFFF8A3D) else AppColors.Divider
+                )
+            ) {
+                Text(
+                    // 기온을 못 받았으면 이모지만
+                    (weather?.emoji ?: "⛅") + (weather?.tempC?.let { " $it°" } ?: ""),
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp)
+                )
             }
         }
         Spacer(Modifier.width(8.dp))
@@ -360,13 +373,18 @@ private fun HeaderBar(
         if (showWeatherDialog) {
             AlertDialog(
                 onDismissRequest = { showWeatherDialog = false },
-                title = { Text(if (warnActive) "기상특보 발효 중" else "기상특보 없음") },
+                title = { Text(if (warnActive) "기상특보 발효 중" else "오늘 날씨") },
                 text = {
                     Text(
-                        if (warnActive)
-                            "서울 " + weatherWarning + " 발효 중입니다.\n\n폭염 및 이례상황 발생 시 관제보고 철저!"
-                        else
-                            "현재 서울에 발효 중인 기상특보가 없습니다.\n(1시간 간격으로 갱신됩니다)"
+                        buildString {
+                            weather?.tempC?.let { append("신정동 기준 현재 ").append(it).append("℃\n\n") }
+                            append(
+                                if (warning != null)
+                                    "서울 " + warning + " 발효 중입니다.\n\n폭염 및 이례상황 발생 시 관제보고 철저!"
+                                else
+                                    "현재 서울에 발효 중인 기상특보가 없습니다.\n(1시간 간격으로 갱신됩니다)"
+                            )
+                        }
                     )
                 },
                 confirmButton = {
@@ -982,35 +1000,3 @@ private fun FavoriteFilterChip(on: Boolean, count: Int, onToggle: () -> Unit) {
     }
 }
 
-/** 기상특보 배지 — 발효 중일 때만 홈 상단에 나타난다 */
-@Composable
-private fun WeatherWarningBanner(text: String) {
-    Surface(
-        color = Color(0xFFFFF1E6),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-    ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("⚠️", fontSize = 17.sp)
-            Spacer(Modifier.width(9.dp))
-            Column {
-                Text(
-                    "서울 " + text + " 발효 중",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF8A3D00)
-                )
-                Text(
-                    "이례상황 발생 시 관제보고 철저",
-                    fontSize = 12.sp,
-                    color = Color(0xFFB05E1E)
-                )
-            }
-        }
-    }
-}

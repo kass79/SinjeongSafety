@@ -19,6 +19,7 @@ import com.sinjeong.safety.data.CrewRepository
 import com.sinjeong.safety.data.Question
 import com.sinjeong.safety.data.QuestionRepository
 import com.sinjeong.safety.data.PostRepository
+import com.sinjeong.safety.data.WeatherNow
 import com.sinjeong.safety.data.WeatherRepository
 import com.sinjeong.safety.data.Tags
 import kotlinx.coroutines.flow.Flow
@@ -85,9 +86,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _crewName = MutableStateFlow(prefs.getString("crew_name", null))
     val crewName: StateFlow<String?> = _crewName.asStateFlow()
 
-    // ── 기상특보 배지 ───────────────────────────────────────────
-    private val _weatherWarning = MutableStateFlow<String?>(null)
-    val weatherWarning: StateFlow<String?> = _weatherWarning.asStateFlow()
+    // ── 날씨 칩 (기온·하늘·기상특보) ────────────────────────────
+    private val _weather = MutableStateFlow<WeatherNow?>(null)
+    val weather: StateFlow<WeatherNow?> = _weather.asStateFlow()
 
     // ── 알림 설정 (기기별 저장) ─────────────────────────────────
     private val _notificationsEnabled =
@@ -210,10 +211,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _requireLogin.value = crewRepo.requireLogin()
         }
         if (crewRepo.isCrewLoggedIn()) syncFavorites()
-        // 서울 기상특보 확인 (실패하면 배지가 안 뜰 뿐 앱은 정상)
+        // 날씨·기상특보 확인 (실패하면 헤더 칩이 안 뜰 뿐 앱은 정상)
         viewModelScope.launch {
-            _weatherWarning.value = runCatching {
-                WeatherRepository.getWarningText(appContext)
+            _weather.value = runCatching {
+                WeatherRepository.getWeather(appContext)
             }.getOrNull()
         }
         viewModelScope.launch {
