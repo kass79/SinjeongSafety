@@ -80,6 +80,8 @@ dependencies {
     implementation("com.google.firebase:firebase-storage-ktx")
     implementation("com.google.firebase:firebase-messaging-ktx")
     implementation("com.google.firebase:firebase-crashlytics-ktx")
+    // Cloud Functions 호출 (규정 AI 답변·3줄 요약·퀴즈)
+    implementation("com.google.firebase:firebase-functions-ktx")
 
     // 이미지 로딩 (첨부 사진 표시)
     implementation("io.coil-kt:coil-compose:2.7.0")
