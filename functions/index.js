@@ -1,8 +1,14 @@
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getMessaging } = require("firebase-admin/messaging");
 
 initializeApp();
+
+// Anthropic API 키. 코드·저장소에 두지 않고 Secret Manager에 보관한다.
+// 등록:  firebase functions:secrets:set ANTHROPIC_API_KEY --project sinjeongsafety
+const anthropicKey = defineSecret("ANTHROPIC_API_KEY");
 
 /**
  * posts 컬렉션에 새 문서가 생기면 "new_posts" 토픽 구독자 전원에게 푸시 발송
@@ -29,3 +35,127 @@ exports.notifyNewPost = onDocumentCreated(
     console.log(`푸시 발송 완료: ${body}`);
   }
 );
+
+// ── AI 기능 공통 ─────────────────────────────────────────────────
+// 셋 다 같은 뼈대다: 로그인 확인 → Claude 호출 → 텍스트 반환.
+// 앱이 아니라 여기서 키를 쥐고 있으므로 APK를 뜯어도 키가 새지 않는다.
+
+const AI_OPTS = { region: "asia-northeast3", secrets: [anthropicKey], timeoutSeconds: 120 };
+
+/** 로그인한 사용자(승무원·관리자)만 AI를 쓸 수 있다. 익명 호출로 요금이 새는 것을 막는다. */
+function requireAuth(request) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "로그인이 필요합니다");
+  }
+}
+
+/** Claude 호출. 안전분류기가 거부하면 Opus 계열로 자동 우회(fallbacks)한다. */
+async function askClaude({ system, user, maxTokens = 2000 }) {
+  const Anthropic = require("@anthropic-ai/sdk");
+  const client = new Anthropic({ apiKey: anthropicKey.value() });
+  const response = await client.beta.messages.create({
+    model: "claude-opus-5",
+    max_tokens: maxTokens,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    system,
+    messages: [{ role: "user", content: user }],
+  });
+  if (response.stop_reason === "refusal") {
+    throw new HttpsError("failed-precondition", "답변할 수 없는 요청입니다");
+  }
+  return response.content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+}
+
+/**
+ * 규정 자연어 질문 (2단계 AI 답변).
+ * 앱이 기기 안 검색(RegulationSearch)으로 추린 조문을 함께 보내면,
+ * 그 조문만 근거로 답한다. 626조문 전체를 서버에 둘 필요가 없고,
+ * 근거가 눈에 보여야 승무원이 답을 믿고 원문을 확인할 수 있다.
+ */
+exports.askRegulation = onCall(AI_OPTS, async (request) => {
+  requireAuth(request);
+  const question = String(request.data?.question || "").trim();
+  const articles = Array.isArray(request.data?.articles) ? request.data.articles : [];
+  if (!question || question.length > 500) {
+    throw new HttpsError("invalid-argument", "질문을 확인해주세요");
+  }
+  if (articles.length === 0 || articles.length > 8) {
+    throw new HttpsError("invalid-argument", "근거 조문이 없습니다");
+  }
+
+  const context = articles
+    .map((a) => `[${a.n} ${a.t}]\n${String(a.b || "").slice(0, 2000)}`)
+    .join("\n\n");
+
+  const answer = await askClaude({
+    system:
+      "당신은 서울교통공사 신정승무사업소 승무원을 돕는 규정 안내원입니다. " +
+      "아래 제공된 조문만 근거로 답하고, 반드시 조문 번호를 인용하세요. " +
+      "제공된 조문으로 답할 수 없으면 추측하지 말고 '제공된 조문에서는 확인되지 않습니다'라고 말하세요. " +
+      "실무자가 바로 쓸 수 있게 간결하게, 존댓말로 답하세요. " +
+      "마지막 줄에 '※ 정확한 내용은 원문 조문을 확인하세요.'를 붙이세요.",
+    user: `승무원 질문: ${question}\n\n관련 조문:\n${context}`,
+  });
+  return { answer };
+});
+
+/** 게시물 3줄 요약. 글쓰기 화면에서 관리자가 검토 후 붙인다(AI 결과는 초안). */
+exports.summarizePost = onCall(AI_OPTS, async (request) => {
+  requireAuth(request);
+  const title = String(request.data?.title || "").trim();
+  const content = String(request.data?.content || "").trim();
+  if (!content || content.length > 20000) {
+    throw new HttpsError("invalid-argument", "본문을 확인해주세요");
+  }
+
+  const summary = await askClaude({
+    system:
+      "지하철 승무원용 안전정보 게시물을 요약합니다. " +
+      "핵심만 정확히 3줄로, 각 줄은 '- '로 시작하세요. " +
+      "숫자·역명·호선은 원문 그대로 유지하고, 원문에 없는 내용을 만들지 마세요.",
+    user: `제목: ${title}\n\n본문:\n${content}`,
+    maxTokens: 1000,
+  });
+  return { summary };
+});
+
+/**
+ * 사고사례 퀴즈 생성. "읽었다"가 아니라 "이해했다"를 확인하기 위한 문제.
+ * JSON으로 받아 파싱 실패 시 에러를 돌려준다(관리자가 검토 후 게시하는 초안이다).
+ */
+exports.generateQuiz = onCall(AI_OPTS, async (request) => {
+  requireAuth(request);
+  const title = String(request.data?.title || "").trim();
+  const content = String(request.data?.content || "").trim();
+  if (!content || content.length > 20000) {
+    throw new HttpsError("invalid-argument", "본문을 확인해주세요");
+  }
+
+  const text = await askClaude({
+    system:
+      "지하철 승무원 안전교육 출제위원입니다. 주어진 사고사례·안전정보에서 " +
+      "실무에 중요한 핵심을 확인하는 4지선다 문제 2개를 만드세요. " +
+      "본문에 명시된 내용만 출제하고, 다음 JSON 배열만 출력하세요(다른 텍스트 금지): " +
+      '[{"q":"문제","choices":["보기1","보기2","보기3","보기4"],"answer":0,"explain":"해설"}] ' +
+      "answer는 정답 보기의 0부터 시작하는 번호입니다.",
+    user: `제목: ${title}\n\n본문:\n${content}`,
+    maxTokens: 2000,
+  });
+
+  // 모델이 JSON 앞뒤에 군말을 붙이는 경우를 대비해 배열 부분만 잘라 파싱한다.
+  const match = text.match(/\[[\s\S]*\]/);
+  let questions;
+  try {
+    questions = JSON.parse(match ? match[0] : text);
+  } catch (e) {
+    throw new HttpsError("internal", "문제 생성에 실패했습니다. 다시 시도해주세요");
+  }
+  if (!Array.isArray(questions) || questions.length === 0) {
+    throw new HttpsError("internal", "문제 생성에 실패했습니다. 다시 시도해주세요");
+  }
+  return { questions };
+});
