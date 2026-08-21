@@ -479,8 +479,13 @@ private fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
         value = query,
         onValueChange = onQueryChange,
         singleLine = true,
-        placeholder = { Text("제목 또는 내용으로 검색...", color = AppColors.TextSecondary) },
-        leadingIcon = { Icon(Icons.Default.Search, null, tint = AppColors.Primary) },
+        placeholder = {
+            Text("제목 또는 내용으로 검색", color = AppColors.TextSecondary, fontSize = 13.sp)
+        },
+        textStyle = LocalTextStyle.current.copy(fontSize = 13.5.sp),
+        leadingIcon = {
+            Icon(Icons.Default.Search, null, tint = AppColors.Primary, modifier = Modifier.size(18.dp))
+        },
         shape = RoundedCornerShape(50),
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = Color.White,
@@ -488,9 +493,11 @@ private fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
             focusedBorderColor = AppColors.Primary,
             unfocusedBorderColor = AppColors.Divider
         ),
+        // 기본 높이(56dp)는 홈에서 자리를 너무 먹는다. 출무점호를 위로 올리려고 여기서 아낀다.
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .height(46.dp)
     )
 }
 
@@ -1067,8 +1074,13 @@ fun BriefingCard(
     ) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // 오늘 것인지 지난 것인지 제목에서 바로 알 수 있어야 한다.
+                // 문서 id가 yyyyMMdd라 오늘 날짜와 비교하면 그만이다.
+                val todayId = remember {
+                    SimpleDateFormat("yyyyMMdd", Locale.KOREA).format(java.util.Date())
+                }
                 Text(
-                    "출무점호",
+                    if (briefing.id == todayId) "오늘 출무점호" else "최근 출무점호",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = AppColors.Primary
