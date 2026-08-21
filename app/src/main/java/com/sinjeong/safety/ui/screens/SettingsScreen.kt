@@ -1,10 +1,14 @@
 package com.sinjeong.safety.ui.screens
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -26,6 +30,7 @@ import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -68,8 +73,18 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
     val crewEmpNo by vm.crewEmpNo.collectAsState()
     val isAdmin by vm.isAdmin.collectAsState()
     val notifyOn by vm.notificationsEnabled.collectAsState()
+    val useLocationOn by vm.useLocationWeather.collectAsState()
 
     var showLogoutConfirm by remember { mutableStateOf(false) }
+
+    // 스위치를 켤 때만 위치 권한을 묻는다. 허용해야 실제로 켜고, 거부하면 꺼진 채로 둔다.
+    var locationDenied by remember { mutableStateOf(false) }
+    val locationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        locationDenied = !granted
+        if (granted) vm.setUseLocationWeather(true)
+    }
 
     // 휴대폰 설정에서 알림을 껐는지 여부. 설정 앱에 다녀오면 다시 확인한다.
     var systemNotifyOn by remember {
@@ -263,6 +278,81 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
 
                 Spacer(Modifier.height(22.dp))
 
+                // ── 날씨 ─────────────────────────────────────
+                SectionTitle("날씨")
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = AppColors.Surface),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Outlined.Place,
+                                contentDescription = null,
+                                tint = AppColors.Primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "현재 위치 날씨",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AppColors.TextPrimary
+                                )
+                                Text(
+                                    "끄면 신정동 기준으로 보여줍니다. " +
+                                        "위치를 계속 추적하지 않아 배터리를 쓰지 않습니다.",
+                                    fontSize = 12.5.sp,
+                                    color = AppColors.TextSecondary,
+                                    lineHeight = 17.sp
+                                )
+                            }
+                            Switch(
+                                checked = useLocationOn,
+                                onCheckedChange = { on ->
+                                    if (!on) {
+                                        locationDenied = false
+                                        vm.setUseLocationWeather(false)
+                                    } else if (hasLocationPermission(context)) {
+                                        locationDenied = false
+                                        vm.setUseLocationWeather(true)
+                                    } else {
+                                        // 허용 결과를 받은 뒤에 켠다(위 런처 콜백)
+                                        locationPermission.launch(
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                        )
+                                    }
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = AppColors.Primary
+                                )
+                            )
+                        }
+
+                        if (locationDenied) {
+                            Spacer(Modifier.height(12.dp))
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF4E2)),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    "위치 권한이 없어 신정동 기준으로 보여줍니다",
+                                    fontSize = 12.5.sp,
+                                    color = Color(0xFF7A4F00),
+                                    lineHeight = 18.sp,
+                                    modifier = Modifier.padding(12.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(22.dp))
+
                 // ── 앱 정보 ──────────────────────────────────
                 SectionTitle("앱 정보")
                 Card(
@@ -370,6 +460,11 @@ private fun appVersionName(context: Context): String = try {
 } catch (e: Exception) {
     "-"
 }
+
+/** 위치 권한이 이미 있는지 (있으면 다시 묻지 않는다) */
+private fun hasLocationPermission(context: Context): Boolean =
+    context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
+        PackageManager.PERMISSION_GRANTED
 
 /** 휴대폰의 앱 알림 설정 화면 열기 */
 private fun openAppNotificationSettings(context: Context) {

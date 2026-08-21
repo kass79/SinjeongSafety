@@ -4,6 +4,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!--
+      설정에서 "현재 위치 날씨"를 켠 사람만 쓴다. 위치를 추적하지 않고 다른 앱이 이미
+      잡아둔 마지막 위치만 한 번 읽으며, 기상청 격자가 5km 단위라 대략적 위치면 충분하다.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!--
       안드로이드 11부터는 다른 앱이 깔려 있는지 확인하려면 미리 선언해야 한다.

@@ -98,6 +98,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _weather = MutableStateFlow<WeatherNow?>(null)
     val weather: StateFlow<WeatherNow?> = _weather.asStateFlow()
 
+    // 현재 위치 기준으로 볼지 (기기별 저장, 기본 꺼짐 = 지금까지처럼 신정동 고정)
+    private val _useLocationWeather =
+        MutableStateFlow(prefs.getBoolean("weather_use_location", false))
+    val useLocationWeather: StateFlow<Boolean> = _useLocationWeather.asStateFlow()
+
+    /** 현재 위치 날씨 켜기/끄기. 한 시간 기다리게 하지 않도록 그 자리에서 다시 조회한다. */
+    fun setUseLocationWeather(on: Boolean) {
+        _useLocationWeather.value = on
+        prefs.edit().putBoolean("weather_use_location", on).apply()
+        _message.value = UiMessage(
+            if (on) "현재 위치 기준으로 날씨를 보여드립니다" else "신정동 기준으로 날씨를 보여드립니다"
+        )
+        loadWeather()
+    }
+
+    /** 날씨 1회 조회. 실패하면 헤더 칩이 안 뜰 뿐 앱은 정상 */
+    private fun loadWeather() {
+        viewModelScope.launch {
+            _weather.value = runCatching {
+                WeatherRepository.getWeather(appContext, _useLocationWeather.value)
+            }.getOrNull()
+        }
+    }
+
     // ── 알림 설정 (기기별 저장) ─────────────────────────────────
     private val _notificationsEnabled =
         MutableStateFlow(prefs.getBoolean("notify_new_posts", true))
@@ -219,12 +243,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _requireLogin.value = crewRepo.requireLogin()
         }
         if (crewRepo.isCrewLoggedIn()) syncFavorites()
-        // 날씨·기상특보 확인 (실패하면 헤더 칩이 안 뜰 뿐 앱은 정상)
-        viewModelScope.launch {
-            _weather.value = runCatching {
-                WeatherRepository.getWeather(appContext)
-            }.getOrNull()
-        }
+        // 날씨·기상특보 확인
+        loadWeather()
         viewModelScope.launch {
             repo.postsFlow().collect { result ->
                 _isLoading.value = false

@@ -397,7 +397,12 @@ private fun HeaderBar(
                 text = {
                     Text(
                         buildString {
-                            weather?.tempC?.let { append("신정동 기준 현재 ").append(it).append("℃\n\n") }
+                            // 어느 지점 기준인지는 저장소가 정해 준다("현재 위치" / "신정동").
+                            // 설정을 켰어도 위치를 못 얻으면 신정동으로 떨어지므로 여기서 단정하면 안 된다.
+                            weather?.tempC?.let {
+                                append(weather?.placeLabel ?: "신정동")
+                                    .append(" 기준 현재 ").append(it).append("℃\n\n")
+                            }
                             append(
                                 if (warning != null)
                                     "서울 " + warning + " 발효 중입니다.\n\n폭염 및 이례상황 발생 시 관제보고 철저!"
