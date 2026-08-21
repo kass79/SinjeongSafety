@@ -573,15 +573,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ── 출무점호 ────────────────────────────────────────────────
-    fun saveBriefing(raw: String, onSuccess: () -> Unit) {
+    fun saveBriefing(
+        raw: String,
+        fileUris: List<Uri>,
+        links: List<LinkAttachment>,
+        onSuccess: () -> Unit
+    ) {
         if (!_isAdmin.value) return
         viewModelScope.launch {
             try {
-                briefingRepo.save(raw)
+                _isUploading.value = true
+                // 사진 축소·EXIF 처리가 게시물 첨부와 똑같이 필요하므로 그 경로를 그대로 쓴다.
+                val attachments = fileUris.map { uri ->
+                    val (name, size) = fileInfo(uri)
+                    repo.uploadAttachment(getApplication<Application>(), uri, name, mimeOf(uri), size)
+                }
+                briefingRepo.save(raw, attachments, links)
                 _message.value = UiMessage("출무점호를 등록했습니다")
                 onSuccess()
             } catch (e: Exception) {
                 _message.value = UiMessage("등록 실패: ${e.localizedMessage}", true)
+            } finally {
+                _isUploading.value = false
             }
         }
     }

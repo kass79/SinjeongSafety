@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Search
@@ -49,6 +50,7 @@ import coil.compose.AsyncImage
 import com.sinjeong.safety.MainViewModel
 import com.sinjeong.safety.R
 import com.sinjeong.safety.data.Briefing
+import com.sinjeong.safety.data.BriefingItem
 import com.sinjeong.safety.data.Categories
 import com.sinjeong.safety.data.Post
 import com.sinjeong.safety.data.effectiveDate
@@ -995,6 +997,8 @@ private fun ArchiveRow(post: Post, isNew: Boolean, onClick: () -> Unit) {
 
 /** 출무점호 항목 글자색. 원본 한글 문서가 빨간 글씨라 그 느낌을 그대로 살린다. */
 private val BriefingRed = Color(0xFFD32F2F)
+// 하위 항목은 한 톤 옅게 — 계층이 색으로도 구분돼야 훑기 좋다.
+private val BriefingRedSub = Color(0xFFE05252)
 
 /**
  * 출무점호 카드. 홈에서는 최신 한 건을, 작성 화면에서는 미리보기로 같은 모양을 쓴다.
@@ -1011,7 +1015,8 @@ fun BriefingCard(
     isAdmin: Boolean,
     onWrite: () -> Unit,
     onList: (() -> Unit)? = null,
-    collapseLimit: Int = 5
+    // 계층이 생기면서 한 건의 줄 수가 늘었다. 5줄에서 자르면 개요만 보이고 원인이 잘린다.
+    collapseLimit: Int = 8
 ) {
     // 아직 한 건도 없을 때: 관리자에게만 올려달라고 하고, 승무원에게는 그리지 않는다
     // (빈 카드가 자리만 먹는다).
@@ -1090,13 +1095,7 @@ fun BriefingCard(
             }
 
             Spacer(Modifier.height(10.dp))
-            shown.forEach { line ->
-                Row(Modifier.padding(bottom = 3.dp)) {
-                    Text("•", fontSize = 14.sp, lineHeight = 20.sp, color = BriefingRed)
-                    Spacer(Modifier.width(6.dp))
-                    Text(line, fontSize = 14.sp, lineHeight = 20.sp, color = BriefingRed)
-                }
-            }
+            shown.forEach { BriefingItemRow(it) }
 
             if (hidden > 0) {
                 Text(
@@ -1109,6 +1108,8 @@ fun BriefingCard(
                         .padding(top = 4.dp, bottom = 2.dp)
                 )
             }
+
+            BriefingExtras(briefing)
 
             if (briefing.footer.isNotBlank()) {
                 Spacer(Modifier.height(9.dp))
@@ -1136,6 +1137,89 @@ fun BriefingCard(
                 )
             }
         }
+    }
+}
+
+/**
+ * 점호 항목 한 줄. 홈 카드와 '지난 점호' 펼침이 같아야 해서 여기 한 곳에 둔다.
+ * 최상위만 굵게 두는 편이 제목 ▸ 내용 구조가 눈에 바로 들어온다.
+ */
+@Composable
+fun BriefingItemRow(item: BriefingItem) {
+    val top = item.level == 0
+    Row(Modifier.padding(start = (item.level * 12).dp, bottom = 3.dp)) {
+        Text(
+            if (top) "•" else "-",
+            fontSize = if (top) 14.sp else 13.sp, lineHeight = 20.sp,
+            color = if (top) BriefingRed else BriefingRedSub
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            item.text,
+            fontSize = if (top) 14.sp else 13.sp, lineHeight = 20.sp,
+            fontWeight = if (top) FontWeight.Bold else FontWeight.Normal,
+            color = if (top) BriefingRed else BriefingRedSub
+        )
+    }
+}
+
+/**
+ * 점호에 붙은 첨부·링크.
+ * 상세 화면의 첨부 카드들은 그 파일 전용(private)이라 가져올 수 없다. 점호는 아침에
+ * 훑고 지나가는 자리라 사진만 그대로 펼쳐 보이고 나머지는 눌러서 여는 한 줄로 둔다.
+ */
+@Composable
+fun BriefingExtras(briefing: Briefing) {
+    if (briefing.attachments.isEmpty() && briefing.links.isEmpty()) return
+
+    Spacer(Modifier.height(8.dp))
+    briefing.attachments.forEach { att ->
+        if (att.isImage) {
+            AsyncImage(
+                model = att.url,
+                contentDescription = att.name,
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+                    .clip(RoundedCornerShape(12.dp))
+            )
+        } else {
+            BriefingOpenRow(
+                icon = if (att.isVideo) Icons.Default.PlayCircle else Icons.Default.AttachFile,
+                label = att.name,
+                url = att.url
+            )
+        }
+    }
+    briefing.links.forEach { link ->
+        BriefingOpenRow(
+            icon = if (link.isYoutube) Icons.Default.PlayCircle else Icons.Default.Link,
+            label = link.title.ifBlank { link.url },
+            url = link.url
+        )
+    }
+}
+
+@Composable
+private fun BriefingOpenRow(icon: ImageVector, label: String, url: String) {
+    val context = LocalContext.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+            .padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = AppColors.Primary, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(
+            label,
+            fontSize = 12.5.sp,
+            color = AppColors.Primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

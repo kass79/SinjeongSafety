@@ -167,6 +167,9 @@ class PostRepository {
             "attachments" to attachments.map {
                 mapOf("name" to it.name, "url" to it.url, "mimeType" to it.mimeType, "size" to it.size)
             },
+            // 새 글에도 링크를 저장한다. 예전엔 이 줄이 없어서 글을 올릴 때 붙인 링크가
+            // 조용히 사라지고, 수정 화면에서 다시 넣어야만 남았다(updatePost에는 있었다).
+            "links" to links.map { mapOf("url" to it.url, "title" to it.title) },
             "views" to 0L,
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp()

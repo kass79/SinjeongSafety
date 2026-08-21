@@ -1,8 +1,15 @@
 package com.sinjeong.safety.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,13 +23,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,10 +44,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sinjeong.safety.MainViewModel
 import com.sinjeong.safety.data.BriefingRepository
+import com.sinjeong.safety.data.LinkAttachment
 import com.sinjeong.safety.ui.theme.AppColors
 
 /**
@@ -43,12 +58,36 @@ import com.sinjeong.safety.ui.theme.AppColors
  * 한글 문서에서 복사한 원문을 그대로 붙여넣게 하고, 나누는 일은 앱이 한다.
  * 관리자가 항목을 하나씩 입력하게 만들면 매일 아침 쓸 수가 없다.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BriefingWriteScreen(vm: MainViewModel, onBack: () -> Unit) {
 
     var text by remember { mutableStateOf("") }
     // 파싱은 순수 함수라 저장 없이 바로 부를 수 있다 — 올리기 전에 눈으로 확인하는 용도.
     val preview = remember(text) { BriefingRepository.parse(text) }
+
+    val isUploading by vm.isUploading.collectAsState()
+    var newFiles by remember { mutableStateOf(listOf<PendingFile>()) }
+    var links by remember { mutableStateOf(listOf<LinkAttachment>()) }
+    var linkInput by remember { mutableStateOf("") }
+
+    // 게시물 작성 화면과 같은 피커·같은 첨부 UI를 쓴다(WriteScreen.kt).
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        newFiles = newFiles + uris.map { uri ->
+            val (name, size) = vm.fileInfo(uri)
+            PendingFile(uri, name, size, vm.mimeOf(uri))
+        }
+    }
+    val videoPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        newFiles = newFiles + uris.map { uri ->
+            val (name, size) = vm.fileInfo(uri)
+            PendingFile(uri, name, size, vm.mimeOf(uri))
+        }
+    }
 
     Surface(color = AppColors.Background, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -78,14 +117,14 @@ fun BriefingWriteScreen(vm: MainViewModel, onBack: () -> Unit) {
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    "등록",
+                    if (isUploading) "올리는 중…" else "등록",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = AppColors.Primary,
                     modifier = Modifier
-                        .clickable {
+                        .clickable(enabled = !isUploading) {
                             if (text.isBlank()) vm.showMessage("붙여넣은 내용이 없습니다")
-                            else vm.saveBriefing(text) { onBack() }
+                            else vm.saveBriefing(text, newFiles.map { it.uri }, links) { onBack() }
                         }
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
@@ -112,6 +151,107 @@ fun BriefingWriteScreen(vm: MainViewModel, onBack: () -> Unit) {
                     colors = briefingFieldColors(),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp)
                 )
+
+                // ── 파일 · 동영상 첨부 ──────────────────────────────
+                Spacer(Modifier.height(20.dp))
+                SectionLabel("파일 · 동영상 첨부")
+                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.White.copy(alpha = 0.6f),
+                        border = BorderStroke(2.dp, Color(0xFFC6CEE8)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(enabled = !isUploading) { filePicker.launch("*/*") }
+                    ) {
+                        Column(
+                            Modifier.padding(vertical = 14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(Icons.Default.AttachFile, null, tint = AppColors.Primary,
+                                modifier = Modifier.size(22.dp))
+                            Spacer(Modifier.height(6.dp))
+                            Text("사진 · 문서", color = AppColors.Primary,
+                                fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.White.copy(alpha = 0.6f),
+                        border = BorderStroke(2.dp, Color(0xFFC6CEE8)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(enabled = !isUploading) { videoPicker.launch("video/*") }
+                    ) {
+                        Column(
+                            Modifier.padding(vertical = 14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(Icons.Default.Movie, null, tint = AppColors.Primary,
+                                modifier = Modifier.size(22.dp))
+                            Spacer(Modifier.height(6.dp))
+                            Text("동영상 (MP4)", color = AppColors.Primary,
+                                fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    newFiles.forEach { pf ->
+                        when {
+                            pf.isImage -> ImageThumb(model = pf.uri) { newFiles = newFiles - pf }
+                            pf.isVideo -> VideoChip(name = pf.name, size = pf.size) { newFiles = newFiles - pf }
+                            else -> FileChip(name = pf.name, size = pf.size) { newFiles = newFiles - pf }
+                        }
+                    }
+                }
+
+                // ── 링크 첨부 ──────────────────────────────────────
+                Spacer(Modifier.height(20.dp))
+                SectionLabel("링크 첨부")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = linkInput,
+                        onValueChange = { linkInput = it },
+                        singleLine = true,
+                        placeholder = { Text("https:// 주소 붙여넣기", color = AppColors.TextSecondary) },
+                        leadingIcon = { Icon(Icons.Default.Link, null, tint = AppColors.Primary) },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = briefingFieldColors(),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = {
+                            val u = linkInput.trim()
+                            if (u.startsWith("http")) {
+                                links = links + LinkAttachment(url = u, title = "")
+                                linkInput = ""
+                            }
+                        },
+                        enabled = linkInput.trim().startsWith("http"),
+                        colors = ButtonDefaults.buttonColors(containerColor = AppColors.Primary),
+                        shape = RoundedCornerShape(14.dp),
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp)
+                    ) { Text("추가", fontWeight = FontWeight.Bold) }
+                }
+                Text(
+                    "유튜브 링크는 카드에 ▶ 표시로 나옵니다",
+                    fontSize = 11.sp, color = AppColors.TextSecondary,
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(10.dp))
+                links.forEach { link ->
+                    LinkRow(link = link) { links = links - link }
+                    Spacer(Modifier.height(8.dp))
+                }
 
                 if (text.isNotBlank()) {
                     Spacer(Modifier.height(18.dp))

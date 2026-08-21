@@ -42,7 +42,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 /** 작성 화면에서 새로 고른 파일 (업로드 전) */
-private data class PendingFile(val uri: Uri, val name: String, val size: Long, val mime: String) {
+// 출무점호 작성 화면도 같은 첨부 UI를 쓴다 — 같은 패키지라 internal 로 열어 둔다.
+internal data class PendingFile(val uri: Uri, val name: String, val size: Long, val mime: String) {
     val isImage get() = mime.startsWith("image/")
     val isVideo get() = mime.startsWith("video/")
 }
@@ -372,7 +373,7 @@ fun WriteScreen(
 
 // ── 첨부 이미지 썸네일 (X 버튼 포함) ────────────────────────────
 @Composable
-private fun ImageThumb(model: Any, onRemove: () -> Unit) {
+internal fun ImageThumb(model: Any, onRemove: () -> Unit) {
     Box {
         AsyncImage(
             model = model, contentDescription = null,
@@ -385,7 +386,7 @@ private fun ImageThumb(model: Any, onRemove: () -> Unit) {
 
 // ── 첨부 동영상 썸네일 (재생 아이콘) ────────────────────────────
 @Composable
-private fun VideoChip(name: String, size: Long, onRemove: () -> Unit) {
+internal fun VideoChip(name: String, size: Long, onRemove: () -> Unit) {
     Box {
         Box(
             Modifier.size(84.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF1A1C28)),
@@ -404,7 +405,7 @@ private fun VideoChip(name: String, size: Long, onRemove: () -> Unit) {
 
 // ── 링크 첨부 행 (유튜브면 ▶ 표시) ─────────────────────────────
 @Composable
-private fun LinkRow(link: LinkAttachment, onRemove: () -> Unit) {
+internal fun LinkRow(link: LinkAttachment, onRemove: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = Color.White,
@@ -442,7 +443,7 @@ private fun LinkRow(link: LinkAttachment, onRemove: () -> Unit) {
 
 // ── 첨부 문서 칩 (X 버튼 포함) ──────────────────────────────────
 @Composable
-private fun FileChip(name: String, size: Long, onRemove: () -> Unit) {
+internal fun FileChip(name: String, size: Long, onRemove: () -> Unit) {
     val (label, color) = fileTypeInfo(name)
     Surface(
         shape = RoundedCornerShape(14.dp),
@@ -489,7 +490,7 @@ private fun RemoveButton(onRemove: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SectionLabel(text: String) {
+internal fun SectionLabel(text: String) {
     Text(
         text, fontSize = 14.sp, fontWeight = FontWeight.Bold,
         color = AppColors.TextPrimary,

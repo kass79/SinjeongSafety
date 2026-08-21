@@ -33,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -138,15 +137,9 @@ fun BriefingListScreen(vm: MainViewModel, onBack: () -> Unit) {
 
                                 if (open) {
                                     Spacer(Modifier.height(10.dp))
-                                    b.items.forEach { line ->
-                                        Row(Modifier.padding(bottom = 3.dp)) {
-                                            Text("•", fontSize = 14.sp, lineHeight = 20.sp,
-                                                color = Color(0xFFD32F2F))
-                                            Spacer(Modifier.width(6.dp))
-                                            Text(line, fontSize = 14.sp, lineHeight = 20.sp,
-                                                color = Color(0xFFD32F2F))
-                                        }
-                                    }
+                                    // 홈 카드와 같은 모양이어야 해서 같은 조각을 쓴다(HomeScreen.kt)
+                                    b.items.forEach { BriefingItemRow(it) }
+                                    BriefingExtras(b)
                                     if (b.footer.isNotBlank()) {
                                         Spacer(Modifier.height(9.dp))
                                         HorizontalDivider(color = AppColors.Divider)
