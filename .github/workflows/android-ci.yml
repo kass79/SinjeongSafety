@@ -46,9 +46,11 @@ jobs:
         with:
           name: sinjeong-safety-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
 
       - name: AAB 업로드 (플레이스토어 제출용)
         uses: actions/upload-artifact@v4
         with:
           name: sinjeong-safety-release-aab
           path: app/build/outputs/bundle/release/app-release.aab
+          retention-days: 7
