@@ -5,9 +5,13 @@ Android(Kotlin/Compose) + Firebase(SinjeongSafety/sinjeongsafety 프로젝트). 
 
 ## 현재 상태 (2026-08-22 기준 — 숫자는 build.gradle.kts를 믿을 것)
 
-- `main` 최신 `f38a194`, **versionCode 15 / versionName 1.2.0** (숫자는 build.gradle.kts를 믿을 것)
-- v1.0.5 이후: 확인 현황+CSV/PDF → 질의응답 게시판 → 날씨 수정(현황 API·위치 옵션) →
-  출무점호 게시판(계층 파싱·첨부) → **AI 1단계(규정 AI 답변 + 3줄 요약, v1.2.0)**
+- **버전 숫자는 항상 build.gradle.kts에서 직접 확인할 것** (이 문서의 스냅샷은 금방 낡는다. v1.3.4/21까지 나감)
+- v1.0.5 이후: 확인 현황+CSV/PDF → 질의응답 게시판 → 날씨(현황 API·위치 옵션·위치 특보) →
+  출무점호(계층 파싱·첨부·지난 점호 불러오기·월별 정리) → AI(규정 답변+3줄 요약) →
+  댓글(실명제) → 검색창 BasicTextField → 로그아웃 게이트 수정(사번 인증된 기기는 안 막음)
+- **홈 출무점호 카드 선택 순서: 오늘 자 > 내용 있는 최신 > 최신.** 이 순서를 깨면
+  "올렸는데 안 보인다"(오늘 자가 밀림) 또는 "텅 빈 카드"(빈 문서가 최신) 사고가 재발한다. 둘 다 실제로 났다.
+- 퀴즈(generateQuiz): 서버 함수만 배포됨. **사용자가 앱 연결을 명시적으로 거부**("퀴즈는 안 할래") — 재제안 금지.
 - **Cloud Functions 배포됨**(asia-northeast3, Node22): notifyNewPost(푸시—2026-08-22에야 첫 배포됨),
   askRegulation / summarizePost / generateQuiz(앱 연결은 quiz만 남음). Anthropic API 키는
   Secret Manager `ANTHROPIC_API_KEY`. 모델 claude-opus-5. 로그인 사용자만 호출 가능.
