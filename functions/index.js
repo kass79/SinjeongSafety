@@ -8,6 +8,12 @@ initializeApp();
 
 // Anthropic API 키. 코드·저장소에 두지 않고 Secret Manager에 보관한다.
 // 등록:  firebase functions:secrets:set ANTHROPIC_API_KEY --project sinjeongsafety
+//
+// ※ 함정 — 키를 새로 넣은 뒤에는 반드시 이 함수들이 '실제로' 재배포돼야 한다.
+//   배포된 함수는 그때의 비밀 '버전'을 고정해 물고 있어서, 콘솔에서 키만 바꾸면
+//   서버는 옛 키를 계속 쓴다. 그런데 코드가 그대로면 CLI가 "No changes detected"로
+//   건너뛰어 버려 재배포가 안 된다. 그럴 때는 아래 숫자를 올려 해시를 바꾼다.
+//   KEY_ROTATION = 2  (2026-08-22 키 교체)
 const anthropicKey = defineSecret("ANTHROPIC_API_KEY");
 
 /**
