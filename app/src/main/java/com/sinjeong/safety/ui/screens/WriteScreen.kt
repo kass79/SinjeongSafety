@@ -74,6 +74,9 @@ fun WriteScreen(
 ) {
     val editing = editingPostId?.let { vm.postById(it) }
     val isUploading by vm.isUploading.collectAsState()
+    val aiLoading by vm.aiLoading.collectAsState()
+    // AI 요약은 곧바로 본문에 넣지 않는다 — 사람이 먼저 보고 결정한다
+    var aiSummary by remember { mutableStateOf<String?>(null) }
 
     var category by remember { mutableStateOf(editing?.category ?: Categories.HUMAN_ERROR) }
     // 자료 날짜 — 과거 자료를 올릴 때 실제 날짜로 바꾼다. 기본값은 오늘.
@@ -253,6 +256,38 @@ fun WriteScreen(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 190.dp)
             )
 
+            // ── AI 3줄 요약 (초안만 만든다 — 게시는 사람이) ──────
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "AI 초안은 검토 후 게시하세요",
+                    fontSize = 11.sp, color = AppColors.TextSecondary,
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedButton(
+                    // 짧은 글은 요약할 게 없다 (서버 왕복만 낭비)
+                    onClick = { vm.summarizeWithAi(title, content) { aiSummary = it } },
+                    enabled = content.length >= 100 && !aiLoading && !isUploading,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, AppColors.Primary),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                ) {
+                    if (aiLoading) {
+                        CircularProgressIndicator(
+                            color = AppColors.Primary, strokeWidth = 2.dp,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    } else {
+                        Text("AI 3줄 요약", fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold, color = AppColors.Primary)
+                    }
+                }
+            }
+
             // ── 파일 · 동영상 첨부 ──────────────────────────────
             Spacer(Modifier.height(20.dp))
             SectionLabel("파일 · 동영상 첨부")
@@ -367,6 +402,38 @@ fun WriteScreen(
             }
 
             Spacer(Modifier.height(60.dp))
+        }
+
+        // 요약 결과는 다이얼로그로 먼저 보여 주고, 넣을지는 사람이 고른다
+        aiSummary?.let { summary ->
+            AlertDialog(
+                onDismissRequest = { aiSummary = null },
+                title = { Text("AI 요약 초안", fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+                text = {
+                    Column {
+                        Text(summary, fontSize = 13.5.sp, lineHeight = 21.sp,
+                            color = AppColors.TextPrimary)
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            "검토 후 본문 맨 위에 추가됩니다. 틀린 곳은 직접 고친 뒤 게시하세요.",
+                            fontSize = 11.5.sp, color = AppColors.TextSecondary, lineHeight = 17.sp
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        content = "[3줄 요약]\n" + summary + "\n\n" + content
+                        aiSummary = null
+                    }) {
+                        Text("본문에 추가", fontWeight = FontWeight.Bold, color = AppColors.Primary)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { aiSummary = null }) {
+                        Text("취소", color = AppColors.TextSecondary)
+                    }
+                }
+            )
         }
     }
 }

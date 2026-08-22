@@ -14,6 +14,7 @@ import com.sinjeong.safety.data.Post
 import com.sinjeong.safety.data.effectiveDate
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.messaging.FirebaseMessaging
+import com.sinjeong.safety.data.AiRepository
 import com.sinjeong.safety.data.Answer
 import com.sinjeong.safety.data.Briefing
 import com.sinjeong.safety.data.BriefingRepository
@@ -42,6 +43,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val crewRepo = CrewRepository()
     private val questionRepo = QuestionRepository()
     private val briefingRepo = BriefingRepository()
+    private val aiRepo = AiRepository()
     private val appContext: Context = app.applicationContext
     private val prefs = app.getSharedPreferences("safety_prefs", Context.MODE_PRIVATE)
 
@@ -634,6 +636,51 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun viewQuestion(id: String) {
         viewModelScope.launch { questionRepo.incrementViews(id) }
+    }
+
+    // ── 규정 AI 답변 ────────────────────────────────────────────
+    // 실제 호출은 서버(Cloud Functions)가 한다 — 앱에는 API 키가 없다.
+    private val _aiAnswer = MutableStateFlow<String?>(null)
+    val aiAnswer: StateFlow<String?> = _aiAnswer.asStateFlow()
+    private val _aiLoading = MutableStateFlow(false)
+    val aiLoading: StateFlow<Boolean> = _aiLoading.asStateFlow()
+    fun clearAiAnswer() { _aiAnswer.value = null }
+
+    /** 로그인 여부. 서버가 어차피 거부하므로 헛되이 왕복하지 않고 앱에서 먼저 막는다. */
+    private fun aiAllowed(): Boolean {
+        if (crewRepo.isCrewLoggedIn() || _isAdmin.value) return true
+        _message.value = UiMessage("AI 답변은 로그인 후 이용할 수 있습니다", true)
+        return false
+    }
+
+    /** 검색 결과 상위 조문을 근거로 AI에게 답을 요청한다. 로그인 필수(서버가 거부한다). */
+    fun askRegulationAi(question: String, articles: List<Map<String, String>>) {
+        if (!aiAllowed()) return
+        viewModelScope.launch {
+            _aiLoading.value = true
+            try {
+                _aiAnswer.value = aiRepo.askRegulation(question, articles)
+            } catch (e: Exception) {
+                _message.value = UiMessage("AI 답변 실패: ${e.localizedMessage}", true)
+            } finally {
+                _aiLoading.value = false
+            }
+        }
+    }
+
+    /** 글 3줄 요약. 결과는 바로 본문에 넣지 않고 화면이 사람에게 먼저 보여 준다. */
+    fun summarizeWithAi(title: String, content: String, onResult: (String) -> Unit) {
+        if (!aiAllowed()) return
+        viewModelScope.launch {
+            _aiLoading.value = true
+            try {
+                onResult(aiRepo.summarizePost(title, content))
+            } catch (e: Exception) {
+                _message.value = UiMessage("AI 요약 실패: ${e.localizedMessage}", true)
+            } finally {
+                _aiLoading.value = false
+            }
+        }
     }
 
     companion object {

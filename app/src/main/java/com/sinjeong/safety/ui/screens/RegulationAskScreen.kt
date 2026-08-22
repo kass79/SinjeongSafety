@@ -34,6 +34,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sinjeong.safety.MainViewModel
 import com.sinjeong.safety.R
 import com.sinjeong.safety.data.RegBook
 import com.sinjeong.safety.data.RegHit
@@ -66,7 +67,7 @@ private val FAQ = listOf("무선 고장", "지연 시 조치", "휴가 규정", 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RegulationAskScreen(onBack: () -> Unit) {
+fun RegulationAskScreen(vm: MainViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
 
@@ -77,6 +78,7 @@ fun RegulationAskScreen(onBack: () -> Unit) {
     val listState = rememberLazyListState()
 
     LaunchedEffect(Unit) {
+        vm.clearAiAnswer()   // 지난번 답이 새 대화에 묻어 오지 않게
         books = RegulationRepository.loadBooks(context)
         total = books.sumOf { it.articles.size }
         items = listOf(ChatItem.Intro(total))
@@ -92,6 +94,7 @@ fun RegulationAskScreen(onBack: () -> Unit) {
         if (q.isEmpty() || books.isEmpty()) return
         input = ""
         keyboard?.hide()
+        vm.clearAiAnswer()   // 검색어가 바뀌면 앞 질문의 AI 답은 더 이상 근거가 없다
 
         val t0 = System.nanoTime()
         val hits = RegulationSearch.search(books, q)
@@ -137,7 +140,75 @@ fun RegulationAskScreen(onBack: () -> Unit) {
                     is ChatItem.Result -> ResultBubble(item)
                 }
             }
+            // AI 정리 — 마지막 답이 '결과 있음'일 때만. 대화 화면이라 결과 아래(=최신 자리)에 붙인다.
+            item {
+                val last = items.lastOrNull()
+                if (last is ChatItem.Result && last.top.isNotEmpty()) AiSection(vm, last)
+            }
             item { Spacer(Modifier.height(6.dp)) }
+        }
+    }
+}
+
+// ── AI 정리 (서버 Cloud Functions) ──────────────────────────────
+/**
+ * 답이 오면 버튼 자리에 카드가 대신 선다(✕ 로 닫으면 다시 버튼).
+ * 같은 자리에 하나만 두어야 화면이 길어지지 않는다.
+ */
+@Composable
+private fun AiSection(vm: MainViewModel, result: ChatItem.Result) {
+    val answer by vm.aiAnswer.collectAsState()
+    val loading by vm.aiLoading.collectAsState()
+    val text = answer
+
+    if (text != null) {
+        Surface(
+            color = Color(0xFFEEF2FF),
+            shape = RoundedCornerShape(14.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFC9D4F5)),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+        ) {
+            Column(Modifier.padding(horizontal = 13.dp, vertical = 11.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🤖 AI 답변", fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold,
+                        color = AppColors.Primary, modifier = Modifier.weight(1f))
+                    Text("✕", fontSize = 14.sp, color = AppColors.TextSecondary,
+                        modifier = Modifier
+                            .clickable { vm.clearAiAnswer() }
+                            .padding(horizontal = 6.dp, vertical = 2.dp))
+                }
+                Spacer(Modifier.height(7.dp))
+                // 마크다운은 그리지 않는다 — 굵게용 ** 만 걷어내고 그대로 읽힌다
+                Text(text.replace("**", ""), fontSize = 13.5.sp,
+                    color = AppColors.TextPrimary, lineHeight = 22.sp)
+                Spacer(Modifier.height(9.dp))
+                Text("AI가 만든 초안입니다. 반드시 원문 조문으로 확인하세요.",
+                    fontSize = 10.5.sp, color = AppColors.TextHint, lineHeight = 16.sp)
+            }
+        }
+    } else {
+        Button(
+            onClick = {
+                vm.askRegulationAi(
+                    result.query,
+                    result.top.take(5).map {
+                        mapOf("n" to it.article.num, "t" to it.article.title, "b" to it.article.body)
+                    }
+                )
+            },
+            enabled = !loading,
+            colors = ButtonDefaults.buttonColors(containerColor = AppColors.Primary),
+            shape = RoundedCornerShape(50),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+        ) {
+            if (loading) {
+                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp,
+                    modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("AI가 조문을 읽는 중...", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            } else {
+                Text("AI로 정리해서 보기", fontSize = 13.5.sp, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }

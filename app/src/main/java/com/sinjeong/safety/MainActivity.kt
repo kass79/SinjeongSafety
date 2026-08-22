@@ -138,7 +138,7 @@ class MainActivity : ComponentActivity() {
                             }
 
                             composable(Routes.REG_ASK) {
-                                RegulationAskScreen(onBack = { nav.popBackStack() })
+                                RegulationAskScreen(vm = vm, onBack = { nav.popBackStack() })
                             }
 
                             composable(Routes.LOGIN) {
