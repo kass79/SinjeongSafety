@@ -5,12 +5,14 @@ Android(Kotlin/Compose) + Firebase(SinjeongSafety/sinjeongsafety 프로젝트). 
 
 ## 현재 상태 (2026-08-22 기준 — 숫자는 build.gradle.kts를 믿을 것)
 
-- `main` 최신 `fe42b05`, **versionCode 6 / versionName 1.0.5**
-- 최근 변경: 규정에 물어보기(오프라인 검색, v1.0.3) → 규정 뷰어 시스템 뒤로가기 한 단계씩(v1.0.4)
-  → **게시물 확인 현황 + 엑셀/PDF 내보내기(v1.0.5)**
-- 확인 현황: 확인을 누르면 `posts/{글}/confirms/{사번}` 에 이름·시각이 남는다. 관리자가 상세의
-  "N명 확인 ›" 으로 들어가 확인/미확인 명단을 보고, 오른쪽 위 아이콘으로 CSV 공유·인쇄(PDF)한다.
-  미확인 = 사번 명단(assets + config/roster) − 확인한 사번. **보안 규칙을 콘솔에 반영해야 기록이 남는다.**
+- `main` 최신 `f38a194`, **versionCode 15 / versionName 1.2.0** (숫자는 build.gradle.kts를 믿을 것)
+- v1.0.5 이후: 확인 현황+CSV/PDF → 질의응답 게시판 → 날씨 수정(현황 API·위치 옵션) →
+  출무점호 게시판(계층 파싱·첨부) → **AI 1단계(규정 AI 답변 + 3줄 요약, v1.2.0)**
+- **Cloud Functions 배포됨**(asia-northeast3, Node22): notifyNewPost(푸시—2026-08-22에야 첫 배포됨),
+  askRegulation / summarizePost / generateQuiz(앱 연결은 quiz만 남음). Anthropic API 키는
+  Secret Manager `ANTHROPIC_API_KEY`. 모델 claude-opus-5. 로그인 사용자만 호출 가능.
+- Firebase CLI가 이 PC에 kass 계정으로 로그인돼 있어 `firebase deploy --only functions` 직접 가능.
+- 확인 현황: `posts/{글}/confirms/{사번}`. 미확인 = 명단(assets+config/roster) − 확인 사번.
 - 배포: 플레이 비공개 테스트(테스터 11명) + 카톡 APK(zip). 산출물 이름 관례:
   `C:\Users\admin\Downloads\슬기로운승무생활_v{버전}.apk` + 같은 이름 `.zip`
 
