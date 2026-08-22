@@ -104,7 +104,8 @@ fun RegulationAskScreen(vm: MainViewModel, onBack: () -> Unit) {
         else ChatItem.Result(
             query = q,
             totalHits = hits.size,
-            top = hits.take(5),
+            // 화면에는 5개만 보여 주고, AI에는 8개까지 넘긴다 (근거가 많을수록 답이 좋다)
+            top = hits.take(8),
             weak = hits[0].score < RegulationSearch.WEAK_SCORE,
             ms = ms,
             corpus = total
@@ -163,16 +164,16 @@ private fun AiSection(vm: MainViewModel, result: ChatItem.Result) {
 
     if (text != null) {
         Surface(
-            color = Color(0xFFEEF2FF),
+            color = AppColors.TagOpsBg,
             shape = RoundedCornerShape(14.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFC9D4F5)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.TagOpsFg.copy(alpha = 0.3f)),
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
         ) {
             Column(Modifier.padding(horizontal = 13.dp, vertical = 11.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("🤖 AI 답변", fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold,
-                        color = AppColors.Primary, modifier = Modifier.weight(1f))
-                    Text("✕", fontSize = 14.sp, color = AppColors.TextSecondary,
+                        color = AppColors.TagOpsFg, modifier = Modifier.weight(1f))
+                    Text("✕", fontSize = 14.sp, color = AppColors.TagOpsFg,
                         modifier = Modifier
                             .clickable { vm.clearAiAnswer() }
                             .padding(horizontal = 6.dp, vertical = 2.dp))
@@ -191,18 +192,23 @@ private fun AiSection(vm: MainViewModel, result: ChatItem.Result) {
             onClick = {
                 vm.askRegulationAi(
                     result.query,
-                    result.top.take(5).map {
+                    result.top.map {
                         mapOf("n" to it.article.num, "t" to it.article.title, "b" to it.article.body)
                     }
                 )
             },
             enabled = !loading,
-            colors = ButtonDefaults.buttonColors(containerColor = AppColors.Primary),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AppColors.TagOpsBg, contentColor = AppColors.TagOpsFg,
+                // 로딩 중에도 초록을 유지 (기본 회색이면 스피너가 묻힌다)
+                disabledContainerColor = AppColors.TagOpsBg.copy(alpha = 0.6f),
+                disabledContentColor = AppColors.TagOpsFg
+            ),
             shape = RoundedCornerShape(50),
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
         ) {
             if (loading) {
-                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp,
+                CircularProgressIndicator(color = AppColors.TagOpsFg, strokeWidth = 2.dp,
                     modifier = Modifier.size(15.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("AI가 조문을 읽는 중...", fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -372,7 +378,7 @@ private fun ResultBubble(item: ChatItem.Result) {
                     }
                     append(" 중 가까운 ")
                     withStyle(SpanStyle(color = AppColors.Primary, fontWeight = FontWeight.Bold)) {
-                        append("${item.top.size}건")
+                        append("${minOf(item.top.size, 5)}건")
                     }
                     append("이에요.")
                 },
@@ -384,7 +390,7 @@ private fun ResultBubble(item: ChatItem.Result) {
             fontSize = 10.5.sp, color = AppColors.TextHint)
 
         Spacer(Modifier.height(8.dp))
-        item.top.forEach { hit -> HitCard(hit) }
+        item.top.take(5).forEach { hit -> HitCard(hit) }
 
         Surface(
             color = Color(0xFFFFFBE8),

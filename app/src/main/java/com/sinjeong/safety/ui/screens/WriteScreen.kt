@@ -242,7 +242,40 @@ fun WriteScreen(
             )
 
             Spacer(Modifier.height(16.dp))
-            SectionLabel("내용")
+            // "내용" 라벨 줄 오른쪽 끝에 AI 요약 알약 (초안만 만든다 — 게시는 사람이)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                SectionLabel("내용")
+                Spacer(Modifier.weight(1f))
+                // 짧은 글은 요약할 게 없다 (서버 왕복만 낭비)
+                val aiReady = content.length >= 100 && !isUploading
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = if (aiReady) AppColors.TagOpsBg else AppColors.TagOpsBg.copy(alpha = 0.45f),
+                    modifier = Modifier
+                        .padding(bottom = 8.dp)
+                        .clickable(enabled = aiReady && !aiLoading) {
+                            vm.summarizeWithAi(title, content) { aiSummary = it }
+                        }
+                ) {
+                    Box(
+                        Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (aiLoading) {
+                            CircularProgressIndicator(
+                                color = AppColors.TagOpsFg, strokeWidth = 2.dp,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        } else {
+                            Text(
+                                "AI 3줄 요약", fontSize = 12.5.sp, fontWeight = FontWeight.Bold,
+                                color = if (aiReady) AppColors.TagOpsFg
+                                        else AppColors.TagOpsFg.copy(alpha = 0.45f)
+                            )
+                        }
+                    }
+                }
+            }
             OutlinedTextField(
                 value = content, onValueChange = { content = it },
                 enabled = !isUploading,
@@ -255,38 +288,6 @@ fun WriteScreen(
                 shape = RoundedCornerShape(14.dp), colors = writeFieldColors(),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 190.dp)
             )
-
-            // ── AI 3줄 요약 (초안만 만든다 — 게시는 사람이) ──────
-            Spacer(Modifier.height(8.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "AI 초안은 검토 후 게시하세요",
-                    fontSize = 11.sp, color = AppColors.TextSecondary,
-                    modifier = Modifier.weight(1f)
-                )
-                OutlinedButton(
-                    // 짧은 글은 요약할 게 없다 (서버 왕복만 낭비)
-                    onClick = { vm.summarizeWithAi(title, content) { aiSummary = it } },
-                    enabled = content.length >= 100 && !aiLoading && !isUploading,
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, AppColors.Primary),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                ) {
-                    if (aiLoading) {
-                        CircularProgressIndicator(
-                            color = AppColors.Primary, strokeWidth = 2.dp,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    } else {
-                        Text("AI 3줄 요약", fontSize = 12.5.sp,
-                            fontWeight = FontWeight.Bold, color = AppColors.Primary)
-                    }
-                }
-            }
 
             // ── 파일 · 동영상 첨부 ──────────────────────────────
             Spacer(Modifier.height(20.dp))

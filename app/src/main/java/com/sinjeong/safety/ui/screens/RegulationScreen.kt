@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -194,11 +195,34 @@ private fun RegulationHome(
             TodayCard(today, isWeekend, onTodayClick)
         }
         // 규정에 물어보기 (오늘의 규정 바로 아래 / 조문 검색창 바로 위)
+        // 오른쪽 "AI로 정리"는 같은 화면으로 가는 두 번째 문 — AI 버튼이 그 안에 있다는 안내
         item {
-            AskEntryBanner(
-                onClick = onAsk,
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)
-            )
+            Row(
+                Modifier.fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 12.dp)
+                    .height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AskEntryBanner(onClick = onAsk, modifier = Modifier.weight(1f))
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = AppColors.TagOpsBg,
+                    modifier = Modifier.fillMaxHeight().clickable(onClick = onAsk)
+                ) {
+                    Column(
+                        Modifier.padding(horizontal = 14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Outlined.AutoAwesome, null, tint = AppColors.TagOpsFg,
+                            modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.height(4.dp))
+                        Text("AI로 정리", fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold,
+                            color = AppColors.TagOpsFg)
+                    }
+                }
+            }
         }
         // 검색
         item {
