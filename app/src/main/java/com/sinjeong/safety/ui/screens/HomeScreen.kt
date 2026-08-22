@@ -186,12 +186,20 @@ fun HomeScreen(
 
             // 출무점호 — 출근해서 제일 먼저 볼 것이므로 카테고리 바로 아래.
             item {
-                // 무조건 최신(firstOrNull)을 넘기면, 항목 하나 없는 빈 문서가 맨 위에 있을 때
-                // 홈이 텅 빈 카드로 보인다(테스트로 올린 빈 점호가 실제로 그랬다).
-                // 그래서 내용이 있는 최신 건을 먼저 고르고, 그런 게 하나도 없을 때만 최신으로 떨어진다.
-                val briefingToShow = briefings.firstOrNull {
-                    it.items.isNotEmpty() || it.attachments.isNotEmpty() || it.links.isNotEmpty()
-                } ?: briefings.firstOrNull()
+                // 고르는 순서가 중요하다.
+                // 1) 오늘 자가 있으면 무조건 그것. 방금 올린 점호가 항목이 적다는 이유로 밀리면
+                //    관리자 눈에는 "올렸는데 안 보인다"가 된다(실제로 그런 사고가 났다).
+                // 2) 오늘 자가 없을 때만, 내용이 있는 최신 건을 고른다. 항목 하나 없는 빈 문서가
+                //    맨 위에 있으면 홈이 텅 빈 카드로 보이기 때문이다.
+                // 3) 그것도 없으면 그냥 최신.
+                val todayKey = remember {
+                    SimpleDateFormat("yyyyMMdd", Locale.KOREA).format(java.util.Date())
+                }
+                val briefingToShow = briefings.firstOrNull { it.id == todayKey }
+                    ?: briefings.firstOrNull {
+                        it.items.isNotEmpty() || it.attachments.isNotEmpty() || it.links.isNotEmpty()
+                    }
+                    ?: briefings.firstOrNull()
                 BriefingCard(
                     briefing = briefingToShow,
                     isAdmin = isAdmin,
