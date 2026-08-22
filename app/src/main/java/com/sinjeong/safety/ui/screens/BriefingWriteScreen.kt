@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -27,6 +29,7 @@ import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -34,6 +37,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -45,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sinjeong.safety.MainViewModel
@@ -67,6 +72,9 @@ fun BriefingWriteScreen(vm: MainViewModel, onBack: () -> Unit) {
     val preview = remember(text) { BriefingRepository.parse(text) }
 
     val isUploading by vm.isUploading.collectAsState()
+    val briefings by vm.briefings.collectAsState()
+    // 지난 점호 고르는 창. 매일 양식이 비슷해 새로 쓰는 것보다 고쳐 쓰는 게 빠르다.
+    var showPast by remember { mutableStateOf(false) }
     var newFiles by remember { mutableStateOf(listOf<PendingFile>()) }
     var links by remember { mutableStateOf(listOf<LinkAttachment>()) }
     var linkInput by remember { mutableStateOf("") }
@@ -142,7 +150,34 @@ fun BriefingWriteScreen(vm: MainViewModel, onBack: () -> Unit) {
                     color = AppColors.TextSecondary
                 )
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "지난 점호를 불러와 고쳐 올릴 수 있습니다",
+                        fontSize = 12.sp,
+                        color = AppColors.TextSecondary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    // 게시물 작성 화면의 "AI 3줄 요약"과 같은 파스텔 그린 알약(WriteScreen.kt)
+                    Text(
+                        "지난 점호 불러오기",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AppColors.TagOpsFg,
+                        modifier = Modifier
+                            .background(AppColors.TagOpsBg, RoundedCornerShape(50))
+                            .clickable {
+                                if (briefings.isEmpty()) vm.showMessage("불러올 지난 점호가 없습니다")
+                                else showPast = true
+                            }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
@@ -275,6 +310,59 @@ fun BriefingWriteScreen(vm: MainViewModel, onBack: () -> Unit) {
                 Spacer(Modifier.height(40.dp))
             }
         }
+    }
+
+    if (showPast) {
+        AlertDialog(
+            onDismissRequest = { showPast = false },
+            title = { Text("지난 점호 불러오기") },
+            text = {
+                Column {
+                    // 확인 창을 하나 더 띄우는 대신 여기서 미리 경고한다(탭 수를 늘리지 않으려고).
+                    if (text.isNotBlank()) {
+                        Text(
+                            "현재 입력한 내용은 사라집니다",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AppColors.NewBadge
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                        items(briefings.take(10), key = { it.id }) { b ->
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        // raw 원문을 넣으면 preview 는 remember(text) 라 알아서 다시 계산된다.
+                                        text = b.raw
+                                        showPast = false
+                                    }
+                                    .padding(vertical = 10.dp)
+                            ) {
+                                Text(
+                                    b.dateText,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AppColors.TextPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(Modifier.height(3.dp))
+                                Text(
+                                    "지적 ${b.items.size}건",
+                                    fontSize = 12.sp,
+                                    color = AppColors.TextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPast = false }) { Text("취소") }
+            }
+        )
     }
 }
 
