@@ -39,6 +39,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sinjeong.safety.MainViewModel
 import com.sinjeong.safety.ui.theme.AppColors
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * 지난 출무점호.
@@ -53,6 +56,12 @@ fun BriefingListScreen(vm: MainViewModel, onBack: () -> Unit) {
     val isAdmin by vm.isAdmin.collectAsState()
     var expandedId by remember { mutableStateOf<String?>(null) }
     var deleteTarget by remember { mutableStateOf<String?>(null) }
+
+    // 점호 날짜(dateText)와 실제로 올린 날짜는 다를 수 있다 — 지난 자료를 뒤늦게
+    // 올리는 경우가 있어서, 관리자가 그 차이를 알 수 있게 등록 시각을 따로 보여준다.
+    val stampFmt = remember { SimpleDateFormat("M/d HH:mm", Locale.KOREA) }
+    val dayFmt = remember { SimpleDateFormat("yyyyMMdd", Locale.KOREA) }
+    val today = remember { dayFmt.format(Date()) }
 
     Surface(color = AppColors.Background, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -87,69 +96,85 @@ fun BriefingListScreen(vm: MainViewModel, onBack: () -> Unit) {
                     Text("아직 등록된 출무점호가 없습니다", color = AppColors.TextSecondary)
                 }
             } else {
+                // 문서 id(yyyyMMdd) 앞 6자리로 월 그룹. 형식이 어긋난 id는 "기타"로 몰아 방어한다.
+                // briefings 가 이미 최신순이라 groupBy(LinkedHashMap)의 순서를 그대로 쓴다.
+                val byMonth = briefings.groupBy { b ->
+                    if (b.id.length == 8 && b.id.all { c -> c.isDigit() }) b.id.take(6) else "기타"
+                }
                 LazyColumn(
                     Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
-                    items(briefings, key = { it.id }) { b ->
-                        val open = expandedId == b.id
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = AppColors.Surface,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 5.dp)
-                        ) {
-                            Column(Modifier.padding(14.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Column(
-                                        Modifier
-                                            .weight(1f)
-                                            .clickable { expandedId = if (open) null else b.id }
-                                    ) {
-                                        Text(
-                                            b.dateText,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = AppColors.TextPrimary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Spacer(Modifier.height(3.dp))
-                                        Text(
-                                            "지적 ${b.items.size}건",
-                                            fontSize = 12.sp,
-                                            color = AppColors.TextSecondary
-                                        )
+                    byMonth.forEach { (ym, group) ->
+                        item(key = "hdr_$ym") { MonthHeader(ym, group.size) }
+                        items(group, key = { it.id }) { b ->
+                            val open = expandedId == b.id
+                            val stamp = b.createdAt?.let { stampFmt.format(it.toDate()) }
+                            // 오늘 올린 것만 테두리로 살짝 표시 — 그 이상 강조하지 않는다.
+                            val isToday = b.createdAt?.let { dayFmt.format(it.toDate()) == today } == true
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = AppColors.Surface,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isToday) AppColors.TagOpsFg.copy(alpha = 0.35f) else AppColors.Divider
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 5.dp)
+                            ) {
+                                Column(Modifier.padding(14.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Column(
+                                            Modifier
+                                                .weight(1f)
+                                                .clickable { expandedId = if (open) null else b.id }
+                                        ) {
+                                            Text(
+                                                b.dateText,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = AppColors.TextPrimary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(Modifier.height(3.dp))
+                                            Text(
+                                                // createdAt 이 없는 옛 문서는 건수만 (등록 부분 생략)
+                                                if (stamp != null) "지적 ${b.items.size}건 · $stamp 등록"
+                                                else "지적 ${b.items.size}건",
+                                                fontSize = 12.sp,
+                                                color = AppColors.TextSecondary
+                                            )
+                                        }
+                                        if (isAdmin) {
+                                            Icon(
+                                                Icons.Outlined.Delete,
+                                                contentDescription = "삭제",
+                                                tint = AppColors.TextSecondary,
+                                                modifier = Modifier
+                                                    .size(20.dp)
+                                                    .clickable { deleteTarget = b.id }
+                                            )
+                                        }
                                     }
-                                    if (isAdmin) {
-                                        Icon(
-                                            Icons.Outlined.Delete,
-                                            contentDescription = "삭제",
-                                            tint = AppColors.TextSecondary,
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .clickable { deleteTarget = b.id }
-                                        )
-                                    }
-                                }
-
-                                if (open) {
-                                    Spacer(Modifier.height(10.dp))
-                                    // 홈 카드와 같은 모양이어야 해서 같은 조각을 쓴다(HomeScreen.kt)
-                                    b.items.forEach { BriefingItemRow(it) }
-                                    BriefingExtras(b)
-                                    if (b.footer.isNotBlank()) {
-                                        Spacer(Modifier.height(9.dp))
-                                        HorizontalDivider(color = AppColors.Divider)
-                                        Spacer(Modifier.height(8.dp))
-                                        Text(
-                                            b.footer,
-                                            fontSize = 12.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = AppColors.Primary
-                                        )
+    
+                                    if (open) {
+                                        Spacer(Modifier.height(10.dp))
+                                        // 홈 카드와 같은 모양이어야 해서 같은 조각을 쓴다(HomeScreen.kt)
+                                        b.items.forEach { BriefingItemRow(it) }
+                                        BriefingExtras(b)
+                                        if (b.footer.isNotBlank()) {
+                                            Spacer(Modifier.height(9.dp))
+                                            HorizontalDivider(color = AppColors.Divider)
+                                            Spacer(Modifier.height(8.dp))
+                                            Text(
+                                                b.footer,
+                                                fontSize = 12.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = AppColors.Primary
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -175,5 +200,28 @@ fun BriefingListScreen(vm: MainViewModel, onBack: () -> Unit) {
                 TextButton(onClick = { deleteTarget = null }) { Text("취소") }
             }
         )
+    }
+}
+
+/**
+ * 월 구분 헤더. 목록을 훑을 때 경계만 보이면 되므로 배경 없이 가볍게 둔다.
+ */
+@Composable
+private fun MonthHeader(ym: String, count: Int) {
+    val label = if (ym.length == 6) "${ym.take(4)}년 ${ym.substring(4).toInt()}월" else "기타"
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            fontSize = 13.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = AppColors.TextSecondary,
+            modifier = Modifier.weight(1f)
+        )
+        Text("${count}건", fontSize = 12.sp, color = AppColors.TextSecondary)
     }
 }

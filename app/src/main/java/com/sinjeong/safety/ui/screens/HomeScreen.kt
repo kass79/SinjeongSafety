@@ -1068,7 +1068,10 @@ fun BriefingCard(
         Surface(
             shape = RoundedCornerShape(16.dp),
             color = AppColors.Surface,
-            border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
+            // 아래 본 카드와 같은 옅은 초록 테두리로 맞춘다
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp, AppColors.TagOpsFg.copy(alpha = 0.25f)
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 6.dp)
@@ -1107,7 +1110,11 @@ fun BriefingCard(
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = AppColors.Surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
+        // 출무점호는 출근해서 제일 먼저 볼 것이라 다른 카드와 구별돼야 하지만,
+        // 진하면 매일 보는 화면에서 피로해진다. 초록을 아주 옅게(25%)만 태운다.
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp, AppColors.TagOpsFg.copy(alpha = 0.25f)
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
