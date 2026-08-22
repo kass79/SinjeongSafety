@@ -234,6 +234,57 @@ class PostRepository {
         }
     }
 
+    // ── 댓글 (posts/{id}/comments) ────────────────────────────
+    // 질의응답의 답변(QuestionRepository.answersFlow)과 같은 구조다.
+    // 하위 컬렉션이라 목록의 Post 로는 알 수 없고, 상세 화면에서만 구독한다.
+
+    /** 그 글의 댓글 (오래된 순 — 대화 흐름대로 읽히도록) */
+    fun commentsFlow(postId: String): Flow<Result<List<Comment>>> = callbackFlow {
+        val registration = postsRef.document(postId).collection("comments")
+            .orderBy("createdAt", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(Result.failure(error))
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.mapNotNull { doc ->
+                    runCatching { doc.toObject(Comment::class.java) }.getOrNull()
+                } ?: emptyList()
+                trySend(Result.success(list))
+            }
+        awaitClose { registration.remove() }
+    }
+
+    /** 댓글 작성. 목록에 보여줄 댓글 수도 함께 올린다. */
+    suspend fun addComment(
+        postId: String,
+        content: String,
+        authorName: String,
+        authorEmpNo: String,
+        isAdmin: Boolean
+    ) {
+        postsRef.document(postId).collection("comments").add(
+            mapOf(
+                "content" to content.trim(),
+                "authorName" to authorName,
+                "authorEmpNo" to authorEmpNo,
+                "isAdmin" to isAdmin,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+        // 카운터가 실패해도 댓글 자체는 남아야 하므로 따로 감싼다.
+        runCatching {
+            postsRef.document(postId).update("commentCount", FieldValue.increment(1)).await()
+        }
+    }
+
+    suspend fun deleteComment(postId: String, commentId: String) {
+        postsRef.document(postId).collection("comments").document(commentId).delete().await()
+        runCatching {
+            postsRef.document(postId).update("commentCount", FieldValue.increment(-1)).await()
+        }
+    }
+
     /** 그 글을 확인한 사람들 (최근 순). 읽기 실패하면 빈 목록. */
     suspend fun loadConfirms(postId: String): List<CrewConfirm> = runCatching {
         postsRef.document(postId).collection("confirms").get().await().documents.map { d ->

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.sinjeong.safety.data.Attachment
+import com.sinjeong.safety.data.Comment
 import com.sinjeong.safety.data.ConfirmReport
 import com.sinjeong.safety.data.CrewConfirm
 import com.sinjeong.safety.data.LinkAttachment
@@ -469,14 +470,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     val isVideo = mime.startsWith("video/")
                     val isImage = mime.startsWith("image/")
                     // 사진은 업로드 직전에 자동으로 줄여서 올리므로 원본 기준은 넉넉하게 잡는다.
+                    // 1GB짜리 동영상은 업로드에 수 분이 걸린다 — 진행 표시가 끝날 때까지 기다려야 한다.
                     val limit = when {
-                        isVideo -> 200L * 1024 * 1024
+                        isVideo -> 1024L * 1024 * 1024
                         isImage -> 50L * 1024 * 1024
                         else -> 20L * 1024 * 1024
                     }
                     if (size > limit) {
                         val mb = when {
-                            isVideo -> "200MB"
+                            isVideo -> "1GB"
                             isImage -> "50MB"
                             else -> "20MB"
                         }
@@ -519,6 +521,44 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    // ── 게시물 댓글 ─────────────────────────────────────────────
+    // 작성자 표기는 질의응답과 같은 규칙(questionAuthor)을 쓴다.
+
+    fun commentsFlow(postId: String): Flow<Result<List<Comment>>> = repo.commentsFlow(postId)
+
+    fun addComment(postId: String, content: String, onSuccess: () -> Unit) {
+        if (content.isBlank()) return
+        val (name, empNo) = questionAuthor()
+        viewModelScope.launch {
+            try {
+                repo.addComment(postId, content, name, empNo, _isAdmin.value)
+                onSuccess()
+            } catch (e: Exception) {
+                _message.value = UiMessage("댓글 등록 실패: ${e.localizedMessage}", true)
+            }
+        }
+    }
+
+    /**
+     * 삭제는 관리자 또는 본인만. 규칙에서도 막지만, 화면 조건이 어긋나 눌리는 경우를 위해
+     * 여기서도 막는다. 판정에 사번이 필요해 id 대신 댓글을 통째로 받는다.
+     */
+    fun deleteComment(postId: String, comment: Comment) {
+        if (!canDeleteComment(comment)) return
+        viewModelScope.launch {
+            try {
+                repo.deleteComment(postId, comment.id)
+            } catch (e: Exception) {
+                _message.value = UiMessage("삭제 실패: ${e.localizedMessage}", true)
+            }
+        }
+    }
+
+    /** 그 댓글을 지울 수 있는 사람인가 (관리자이거나 본인). 화면의 삭제 아이콘 노출 조건. */
+    fun canDeleteComment(comment: Comment): Boolean =
+        _isAdmin.value ||
+            (comment.authorEmpNo.isNotBlank() && comment.authorEmpNo == _crewEmpNo.value)
 
     // ── 질의응답 ────────────────────────────────────────────────
     /**

@@ -4,9 +4,15 @@ service firebase.storage {
     match /attachments/{fileName} {
       // 모든 직원: 첨부파일 열람/다운로드 가능
       allow read: if true;
-      // 업로드: 로그인한 관리자만, 파일당 20MB 제한
+      // 업로드: 로그인한 사용자. 동영상만 1GB까지 받고 나머지는 50MB로 묶는다.
+      // (앱의 검사와 같은 값이어야 한다 — 한쪽만 고치면 업로드가 조용히 실패한다)
       allow write: if request.auth != null
-                   && request.resource.size < 20 * 1024 * 1024;
+                   && (
+                        (request.resource.contentType != null
+                         && request.resource.contentType.matches('video/.*')
+                         && request.resource.size < 1024 * 1024 * 1024)
+                        || request.resource.size < 50 * 1024 * 1024
+                      );
     }
   }
 }

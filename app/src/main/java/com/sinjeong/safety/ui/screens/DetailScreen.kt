@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.filled.PlayCircle
@@ -45,6 +46,7 @@ import coil.compose.AsyncImage
 import com.sinjeong.safety.MainViewModel
 import com.sinjeong.safety.data.Attachment
 import com.sinjeong.safety.data.Categories
+import com.sinjeong.safety.data.Comment
 import com.sinjeong.safety.data.LinkAttachment
 import com.sinjeong.safety.ui.theme.AppColors
 import java.text.SimpleDateFormat
@@ -57,13 +59,23 @@ fun DetailScreen(
     postId: String,
     onBack: () -> Unit,
     onEdit: (String) -> Unit,
-    onConfirmStatus: (String) -> Unit
+    onConfirmStatus: (String) -> Unit,
+    onLoginClick: () -> Unit
 ) {
     val posts by vm.posts.collectAsState()
     val post = posts.find { it.id == postId }
     val isAdmin by vm.isAdmin.collectAsState()
+    val crewEmpNo by vm.crewEmpNo.collectAsState()
+    val loggedIn = crewEmpNo != null || isAdmin
     val favoriteIds by vm.favoriteIds.collectAsState()
     var showDeleteDialog by remember { mutableStateOf(false) }
+
+    // 댓글은 하위 컬렉션이라 목록의 Post 로는 알 수 없다. 이 화면에서만 구독한다.
+    // postId 가 바뀔 때만 새로 만든다 — 매 재구성마다 만들면 리스너가 계속 새로 붙는다.
+    val commentFlow = remember(postId) { vm.commentsFlow(postId) }
+    val commentsResult by commentFlow.collectAsState(initial = Result.success(emptyList()))
+    val comments = commentsResult.getOrDefault(emptyList())
+    var commentInput by remember { mutableStateOf("") }
 
     LaunchedEffect(postId) { vm.markRead(postId) }
 
@@ -107,6 +119,70 @@ fun DetailScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
+        },
+        // ── 맨 아래 고정 댓글 입력줄 ──
+        // 질의응답 화면과 같은 방식이다. 매니페스트가 adjustResize 라 키보드가 뜨면
+        // 창 자체가 줄어들고 이 줄이 키보드 위로 올라온다(별도 imePadding 불필요).
+        bottomBar = {
+            if (post != null) {
+                if (loggedIn) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(Color.White)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = commentInput,
+                            onValueChange = { commentInput = it },
+                            placeholder = {
+                                Text("댓글을 입력하세요", color = AppColors.TextHint, fontSize = 14.sp)
+                            },
+                            maxLines = 4,
+                            shape = RoundedCornerShape(20.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color.White,
+                                unfocusedContainerColor = Color.White,
+                                focusedBorderColor = AppColors.Primary,
+                                unfocusedBorderColor = AppColors.Divider
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        IconButton(
+                            onClick = {
+                                if (commentInput.isNotBlank())
+                                    vm.addComment(postId, commentInput) { commentInput = "" }
+                            },
+                            enabled = commentInput.isNotBlank()
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                "댓글 등록",
+                                tint = if (commentInput.isNotBlank()) AppColors.Primary
+                                       else AppColors.TextHint
+                            )
+                        }
+                    }
+                } else {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(Color.White)
+                            .clickable(onClick = onLoginClick)
+                            .padding(vertical = 18.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "로그인하면 댓글을 쓸 수 있습니다",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AppColors.Primary
+                        )
+                    }
+                }
+            }
         }
     ) { padding ->
         if (post == null) {
@@ -254,6 +330,34 @@ fun DetailScreen(
                     }
                 }
             }
+
+            // ── 댓글 ──
+            Spacer(Modifier.height(18.dp))
+            HorizontalDivider(color = AppColors.Divider)
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "댓글 ${comments.size}",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = AppColors.TextPrimary
+            )
+            Spacer(Modifier.height(10.dp))
+            // 댓글이 없으면 구분선 아래가 텅 비어 고장난 것처럼 보인다
+            if (comments.isEmpty()) {
+                Text(
+                    "첫 댓글을 남겨보세요",
+                    fontSize = 13.sp,
+                    color = AppColors.TextSecondary
+                )
+            } else {
+                comments.forEach { c ->
+                    CommentRow(
+                        comment = c,
+                        canDelete = vm.canDeleteComment(c),
+                        onDelete = { vm.deleteComment(postId, c) }
+                    )
+                }
+            }
         }
     }
 
@@ -275,6 +379,63 @@ fun DetailScreen(
     }
 }
 
+
+// ── 댓글 한 줄 ─────────────────────────────────────────────────
+// 질의응답 답변(AnswerRow)과 같은 모양이다. 이니셜 배지·관리자 뱃지 규칙을 맞춰야
+// 두 게시판을 오가는 사람이 같은 화면으로 읽는다.
+@Composable
+private fun CommentRow(comment: Comment, canDelete: Boolean, onDelete: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 7.dp)
+    ) {
+        AuthorInitial(comment.authorName, admin = comment.isAdmin, size = 32)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    comment.authorName.ifBlank { "이름 미등록" },
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AppColors.TextPrimary
+                )
+                if (comment.isAdmin) {
+                    Spacer(Modifier.width(6.dp))
+                    Surface(shape = RoundedCornerShape(6.dp), color = AppColors.Primary) {
+                        Text(
+                            "관리자",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(6.dp))
+                Text(comment.createdAt.toRelative(), fontSize = 11.5.sp, color = AppColors.TextHint)
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                comment.content,
+                fontSize = 14.sp,
+                color = AppColors.TextPrimary,
+                lineHeight = 21.sp
+            )
+        }
+        if (canDelete) {
+            Icon(
+                Icons.Default.Delete,
+                "댓글 삭제",
+                tint = AppColors.TextHint,
+                modifier = Modifier
+                    .padding(start = 8.dp, top = 2.dp)
+                    .size(18.dp)
+                    .clickable(onClick = onDelete)
+            )
+        }
+    }
+}
 
 // ── 첨부 이미지 갤러리 (2열, 탭하면 원본 열기) ──────────────────
 @Composable

@@ -331,7 +331,7 @@ fun WriteScreen(
                 }
             }
             Text(
-                "사진·PDF·DOCX·HWP (20MB) · 동영상 MP4 (최대 200MB)",
+                "사진·PDF·DOCX·HWP (20MB) · 동영상 MP4 (최대 1GB)",
                 fontSize = 11.sp, color = AppColors.TextSecondary,
                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center

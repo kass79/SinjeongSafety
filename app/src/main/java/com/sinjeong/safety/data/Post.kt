@@ -57,6 +57,7 @@ data class Post(
     val views: Long = 0,
     val pinned: Boolean = false,        // 상단 고정
     val confirms: Long = 0,             // 확인(읽음) 인원 수
+    val commentCount: Long = 0,         // 댓글 수. 목록에서 보여주려고 세어 둔다(옛 글에는 없다)
     val createdAt: Timestamp? = null,
     val updatedAt: Timestamp? = null,
     /**
@@ -70,6 +71,19 @@ data class Post(
 /** 정렬·표시에 쓰는 기준 날짜. 자료 날짜가 없으면 올린 시각으로 대체한다. */
 val Post.effectiveDate: Timestamp?
     get() = docDate ?: createdAt
+
+/**
+ * 댓글 1건.  posts/{postId}/comments/{자동id}  문서.
+ * 실명제라 질의응답의 Answer 와 같은 모양으로 둔다(표기 규칙을 한 곳에 맞춘다).
+ */
+data class Comment(
+    @DocumentId val id: String = "",
+    val content: String = "",
+    val authorName: String = "",
+    val authorEmpNo: String = "",
+    val isAdmin: Boolean = false,
+    val createdAt: Timestamp? = null
+)
 
 /**
  * 확인 기록 1건.  posts/{postId}/confirms/{사번}  문서.

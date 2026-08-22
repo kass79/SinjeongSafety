@@ -485,7 +485,8 @@ private fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
         onValueChange = onQueryChange,
         singleLine = true,
         placeholder = {
-            Text("제목 또는 내용으로 검색", color = AppColors.TextSecondary, fontSize = 13.sp)
+            // 무엇을 칠 수 있는지 감이 오도록 설명 대신 실제 검색어 예시 하나를 보여 준다
+            Text("예) 승강장안전문", color = AppColors.TextSecondary, fontSize = 13.sp)
         },
         textStyle = LocalTextStyle.current.copy(fontSize = 13.5.sp),
         leadingIcon = {

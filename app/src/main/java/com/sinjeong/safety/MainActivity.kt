@@ -173,7 +173,8 @@ class MainActivity : ComponentActivity() {
                                     postId = postId,
                                     onBack = { nav.popBackStack() },
                                     onEdit = { id -> nav.navigate(Routes.edit(id)) },
-                                    onConfirmStatus = { id -> nav.navigate(Routes.confirms(id)) }
+                                    onConfirmStatus = { id -> nav.navigate(Routes.confirms(id)) },
+                                    onLoginClick = { nav.navigate(Routes.CREW_LOGIN) }
                                 )
                             }
 

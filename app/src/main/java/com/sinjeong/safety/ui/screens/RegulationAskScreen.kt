@@ -138,13 +138,13 @@ fun RegulationAskScreen(vm: MainViewModel, onBack: () -> Unit) {
                         FaqChips(onPick = { ask(it) })
                     }
                     is ChatItem.Empty -> EmptyBubble()
-                    is ChatItem.Result -> ResultBubble(item)
+                    is ChatItem.Result -> {
+                        // AI 정리는 가장 최근 결과 '위'에 — 버튼을 먼저 보고 그 아래로 조문을 읽는다.
+                        // 같은 LazyColumn item 안에 두어야 아래 자동 스크롤(마지막 item)이 버튼 위를 잡는다.
+                        if (item === items.lastOrNull() && item.top.isNotEmpty()) AiSection(vm, item)
+                        ResultBubble(item)
+                    }
                 }
-            }
-            // AI 정리 — 마지막 답이 '결과 있음'일 때만. 대화 화면이라 결과 아래(=최신 자리)에 붙인다.
-            item {
-                val last = items.lastOrNull()
-                if (last is ChatItem.Result && last.top.isNotEmpty()) AiSection(vm, last)
             }
             item { Spacer(Modifier.height(6.dp)) }
         }
@@ -390,7 +390,11 @@ private fun ResultBubble(item: ChatItem.Result) {
             fontSize = 10.5.sp, color = AppColors.TextHint)
 
         Spacer(Modifier.height(8.dp))
-        item.top.take(5).forEach { hit -> HitCard(hit) }
+        // RegulationSearch 가 점수 내림차순으로 정렬해 주므로 첫 번째가 1위다.
+        // 결과가 1건뿐이면 비교 대상이 없어 강조가 의미 없다.
+        item.top.take(5).forEachIndexed { index, hit ->
+            HitCard(hit, best = index == 0 && item.top.size > 1)
+        }
 
         Surface(
             color = Color(0xFFFFFBE8),
@@ -407,15 +411,21 @@ private fun ResultBubble(item: ChatItem.Result) {
 
 // ── 결과 카드 (탭하면 조문 전문) ────────────────────────────────
 @Composable
-private fun HitCard(hit: RegHit) {
+private fun HitCard(hit: RegHit, best: Boolean = false) {
     var open by remember(hit.article.num, hit.book) { mutableStateOf(false) }
     val (bg, fg) = bookBadgeColors(hit.book)
 
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = Color.White,
+        // 1위 조문만 아주 연한 그린으로 띄운다
+        color = if (best) AppColors.TagOpsBg else Color.White,
         border = androidx.compose.foundation.BorderStroke(
-            1.dp, if (open) AppColors.PrimaryLight else AppColors.Divider
+            if (best) 1.5.dp else 1.dp,
+            when {
+                best -> AppColors.TagOpsFg.copy(alpha = 0.5f)
+                open -> AppColors.PrimaryLight
+                else -> AppColors.Divider
+            }
         ),
         modifier = Modifier.fillMaxWidth().padding(bottom = 9.dp)
             .clickable { open = !open }
@@ -436,8 +446,19 @@ private fun HitCard(hit: RegHit) {
                     fontWeight = FontWeight.SemiBold, color = AppColors.TextHint)
             }
             Spacer(Modifier.height(6.dp))
-            Text(markUp(hit.article.title, hit.marks), fontSize = 14.sp,
-                fontWeight = FontWeight.Bold, color = AppColors.TextPrimary, lineHeight = 19.sp)
+            Row(verticalAlignment = Alignment.Top) {
+                Text(markUp(hit.article.title, hit.marks), fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold, color = AppColors.TextPrimary, lineHeight = 19.sp,
+                    modifier = Modifier.weight(1f, fill = false))
+                if (best) {
+                    Spacer(Modifier.width(6.dp))
+                    Surface(color = AppColors.TagOpsFg, shape = RoundedCornerShape(6.dp)) {
+                        Text("관련도 높음", color = Color.White, fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                    }
+                }
+            }
             Spacer(Modifier.height(5.dp))
             if (open) {
                 HorizontalDivider(color = AppColors.Divider, modifier = Modifier.padding(vertical = 4.dp))

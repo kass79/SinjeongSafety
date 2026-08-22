@@ -38,17 +38,37 @@ service cloud.firestore {
 
       // 조회수(views)와 확인 인원(confirms)은 로그인 없이도 +1 할 수 있어야 한다.
       // 예전에는 views만 허용해서 확인 카운터가 조용히 실패했다.
+      // 댓글 수(commentCount)는 지울 때 -1도 해야 해서 양방향으로 열어 둔다.
+      // 옛 글에는 commentCount 필드가 아예 없다. 그때 resource.data.commentCount 를
+      // 읽으면 규칙이 통째로 실패해 첫 댓글이 막히므로, 없을 때는 1이 되는 것만 허용한다.
       function onlyCounterIncrement() {
         let keys = request.resource.data.diff(resource.data).affectedKeys();
-        return keys.hasOnly(['views', 'confirms'])
+        return keys.hasOnly(['views', 'confirms', 'commentCount'])
             && (!keys.hasAny(['views']) || request.resource.data.views == resource.data.views + 1)
-            && (!keys.hasAny(['confirms']) || request.resource.data.confirms == resource.data.confirms + 1);
+            && (!keys.hasAny(['confirms']) || request.resource.data.confirms == resource.data.confirms + 1)
+            && (!keys.hasAny(['commentCount'])
+                || (!('commentCount' in resource.data)
+                    ? request.resource.data.commentCount == 1
+                    : (request.resource.data.commentCount == resource.data.commentCount + 1
+                       || request.resource.data.commentCount == resource.data.commentCount - 1)));
       }
 
       // 확인 기록. 본인 사번 문서만 남길 수 있고, 명단 조회는 관리자만 한다.
       match /confirms/{empNo} {
         allow read: if isAdmin();
         allow write: if isCrew() && request.auth.token.email == empNo + '@sinjeong.app';
+      }
+
+      // 댓글. 실명제라 로그인한 사람만 쓰고, 지우는 건 관리자 또는 본인이다.
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if (isCrew() || isAdmin())
+                      && request.resource.data.content is string
+                      && request.resource.data.content.size() > 0
+                      && request.resource.data.content.size() <= 2000;
+        allow delete: if isAdmin()
+                      || (isCrew() && request.auth.token.email == resource.data.authorEmpNo + '@sinjeong.app');
+        allow update: if false;
       }
     }
 
