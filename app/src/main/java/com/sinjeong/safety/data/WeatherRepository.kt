@@ -3,6 +3,8 @@ package com.sinjeong.safety.data
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.Geocoder
+import android.location.Location
 import android.location.LocationManager
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
@@ -25,7 +27,8 @@ import kotlin.math.tan
  * 날씨 (기상청 / 공공데이터포털)
  *
  * 홈 헤더의 작은 칩에 쓸 두 가지를 모은다.
- * - 서울에 "지금 발효 중인" 기상특보  (WthrWrnInfoService/getPwnStatus)
+ * - 현재 시/도에 "지금 발효 중인" 기상특보 (WthrWrnInfoService/getPwnStatus)
+ *   위치 옵션이 꺼져 있거나 지역명을 못 얻으면 서울 기준
  * - 신정동 기준 현재 기온·하늘상태    (VilageFcstInfoService_2.0/getUltraSrtFcst)
  *
  * 설계 원칙
@@ -43,11 +46,14 @@ data class WeatherNow(
     val tempC: Int?,        // 기온(℃). 못 받으면 null
     val sky: Int,           // 1 맑음 / 3 구름많음 / 4 흐림
     val pty: Int,           // 0 없음 / 1 비 / 2 비눈 / 3 눈 / 4 소나기
-    val warning: String?,   // 서울에 발효 중인 특보. 없으면 null
+    val warning: String?,   // 그 지역에 발효 중인 특보. 없으면 null
     // 어느 지점 기준인지. "현재 위치" 또는 "신정동".
     // 설정을 켜도 위치를 못 얻으면 조용히 신정동으로 떨어지는데, 그때 화면이
     // 계속 "현재 위치"라고 우기면 사용자가 엉뚱한 지역 날씨로 오해한다.
-    val placeLabel: String = "신정동"
+    val placeLabel: String = "신정동",
+    // 특보를 어느 시/도 기준으로 골랐는지 ("서울", "경기도" …).
+    // 위치를 안 쓰거나 지역명을 못 얻으면 지금까지처럼 서울이다.
+    val warningArea: String = "서울"
 ) {
     /** 헤더 칩에 쓸 이모지 한 글자. 밤낮은 구분하지 않는다(아이콘 두 벌 관리할 값어치가 없다) */
     val emoji: String
@@ -83,8 +89,11 @@ object WeatherRepository {
     // 캐시 키를 v3로 새로 판 이유: v2 저장값에는 격자(nx·ny)가 없다. 현재 위치 기능이
     // 생긴 뒤로는 "언제 받았나"뿐 아니라 "어디 격자로 받았나"까지 맞아야 재사용할 수 있는데,
     // 같은 키를 재사용하면 격자 없는 옛 값이 신정동 것으로 오인돼 1시간 동안 살아남는다.
-    private const val KEY_JSON = "weather_now_v3"
-    private const val KEY_TIME = "weather_now_v3_time"
+    // 캐시 키를 v4로 새로 판 이유: v3 저장값에는 특보 지역(warningArea)이 없다. 특보가
+    // 서울 고정에서 현재 위치의 시/도 기준으로 바뀌었으므로, 같은 키를 재사용하면 지역이
+    // 빠진 옛 값이 "서울" 로 되살아나 한 시간 동안 엉뚱한 지역 특보를 보여 준다.
+    private const val KEY_JSON = "weather_now_v4"
+    private const val KEY_TIME = "weather_now_v4_time"
 
     /**
      * 특보 + 기온. 1시간 캐시. 전부 실패하면 null
@@ -97,7 +106,7 @@ object WeatherRepository {
 
         // 쓸 격자를 먼저 정한다. 캐시 유효성 판정에 격자가 필요하기 때문이다.
         val loc = if (useLocation) lastKnownLocation(context) else null
-        val (nx, ny) = if (loc != null) loc else NX to NY
+        val (nx, ny) = if (loc != null) latLonToGrid(loc.latitude, loc.longitude) else NX to NY
         val label = if (loc != null) "현재 위치" else "신정동"
 
         // 시간이 남았어도 격자가 다르면 버린다. 안 그러면 스위치를 켠 뒤에도
@@ -107,10 +116,13 @@ object WeatherRepository {
             if (cached != null) fromJson(cached, nx, ny)?.let { return it }
         }
 
+        // 특보도 지금 있는 시/도 기준으로 본다. 좌표에서 시도 이름을 못 얻으면 서울로 떨어진다.
+        // 지오코딩은 캐시가 비었을 때만 — 1시간에 한 번이면 충분하다.
+        val area = (if (loc != null) adminAreaOf(context, loc.latitude, loc.longitude) else null)
+            ?: "서울"
+
         // 둘 중 하나가 죽어도 나머지는 살린다
-        // 특보는 위치와 무관하게 계속 서울 기준이다 — 승무원 근무지가 서울이라
-        // 휴가지에서 앱을 열어도 봐야 할 특보는 서울 것이다.
-        val warning = runCatching { fetchWarning() }.getOrNull()
+        val warning = runCatching { fetchWarning(area) }.getOrNull()
         val fcst = runCatching { fetchForecast(nx, ny) }.getOrNull()
         if (warning == null && fcst == null) return null
 
@@ -119,7 +131,8 @@ object WeatherRepository {
             sky = fcst?.second ?: 1,
             pty = fcst?.third ?: 0,
             warning = warning,
-            placeLabel = label
+            placeLabel = label,
+            warningArea = area
         )
         prefs.edit()
             .putString(KEY_JSON, toJson(now, nx, ny))
@@ -169,7 +182,7 @@ object WeatherRepository {
      * requestLocationUpdates / requestSingleUpdate 는 쓰지 않는다 — 위치를 새로 잡으면
      * 배터리를 쓴다. 날씨 조회 자체가 1시간에 한 번이라 최신 위치일 필요도 없다.
      */
-    private fun lastKnownLocation(context: Context): Pair<Int, Int>? {
+    private fun lastKnownLocation(context: Context): Location? {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
         ) return null
@@ -184,16 +197,46 @@ object WeatherRepository {
                 LocationManager.GPS_PROVIDER
             ).mapNotNull { lm.getLastKnownLocation(it) }
                 .maxByOrNull { it.time }
-                ?.let { latLonToGrid(it.latitude, it.longitude) }
         }.getOrNull()   // SecurityException 등은 삼키고 신정동으로 떨어진다
+    }
+
+    /**
+     * 좌표 → 시/도 짧은 이름("서울", "경기도"). 못 얻으면 null → 호출자가 서울로 떨어진다.
+     *
+     * 안드로이드 기본 Geocoder 만 쓴다(새 라이브러리 없음). API 33+ 에서 동기
+     * getFromLocation 은 deprecated 지만 동작하며, 콜백 버전을 쓰자고 코드를 두 벌
+     * 만들 값어치가 없다. 네트워크를 탈 수 있으므로 IO 로 넘긴다.
+     */
+    @Suppress("DEPRECATION")
+    private suspend fun adminAreaOf(context: Context, lat: Double, lon: Double): String? =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                Geocoder(context, Locale.KOREA).getFromLocation(lat, lon, 1)
+                    ?.firstOrNull()?.adminArea
+            }.getOrNull()?.let { normalizeArea(it) }
+        }
+
+    /**
+     * "서울특별시" → "서울", "강원특별자치도" → "강원". t6 의 지역 표기가 짧은 형태라
+     * 접미사를 떼어 맞춰 준다. "경기도"처럼 이미 짧은 것은 그대로 둔다.
+     *
+     * 순수 함수 — 손으로 검증할 수 있어야 한다.
+     */
+    internal fun normalizeArea(adminArea: String?): String? {
+        val s = adminArea?.trim().orEmpty()
+        if (s.isBlank()) return null
+        // 긴 접미사부터 떼야 "특별자치도"가 "특별시"·"자치도"로 어긋나 잘리지 않는다
+        val n = s.removeSuffix("특별자치시").removeSuffix("특별자치도")
+            .removeSuffix("특별시").removeSuffix("광역시")
+        return n.takeIf { it.isNotBlank() }
     }
 
     // ── 기상특보 현황 ────────────────────────────────────────────
 
-    private suspend fun fetchWarning(): String? = withContext(Dispatchers.IO) {
+    private suspend fun fetchWarning(area: String): String? = withContext(Dispatchers.IO) {
         val url = "https://apis.data.go.kr/1360000/WthrWrnInfoService/getPwnStatus" +
             "?serviceKey=$SERVICE_KEY&pageNo=1&numOfRows=1&dataType=JSON&stnId=$STN_SEOUL"
-        parseSeoulWarning(get(url)?.let { extractT6(it) })
+        parseWarningFor(get(url)?.let { extractT6(it) }, area)
     }
 
     /** 응답에서 t6(전국 발효 현황) 문자열만 꺼낸다. 형식이 바뀌어도 죽지 않게 전부 opt로 더듬는다 */
@@ -207,7 +250,7 @@ object WeatherRepository {
     }
 
     /**
-     * t6 파싱 — 서울에 발효 중인 특보만 골라 "폭염주의보 · 호우주의보" 로 묶는다.
+     * t6 파싱 — 주어진 시/도에 발효 중인 특보만 골라 "폭염주의보 · 호우주의보" 로 묶는다.
      *
      * t6 실제 형식:
      *   o 폭염경보 : 전라남도(광양, 순천), 광주, 울산(울산서부)
@@ -216,8 +259,8 @@ object WeatherRepository {
      *
      * 순수 함수로 빼 둔 이유: 실제 응답 문자열로 눈이 아니라 손으로 검증할 수 있어야 한다.
      */
-    internal fun parseSeoulWarning(t6: String?): String? {
-        if (t6.isNullOrBlank()) return null
+    internal fun parseWarningFor(t6: String?, area: String): String? {
+        if (t6.isNullOrBlank() || area.isBlank()) return null
         val found = t6.lines()
             .map { it.trim() }
             .filter { it.startsWith("o ") || it.startsWith("o\t") }
@@ -226,14 +269,25 @@ object WeatherRepository {
                 if (idx < 0) return@mapNotNull null
                 val kind = line.substring(2, idx).trim()          // "o " 다음부터 ':' 앞까지
                 val areas = line.substring(idx + 1)
-                // 지역 목록에 "서울"이 든 줄만 채택. 다른 시도 이름에 "서울"이 들어가는 경우는 없다.
                 if (kind.endsWith("경보") || kind.endsWith("주의보")) {
-                    if (areas.contains("서울")) kind else null
+                    if (areaMatches(areas, area)) kind else null
                 } else null
             }
             .distinct()
         return if (found.isEmpty()) null else found.joinToString(" · ")
     }
+
+    /**
+     * "경기도(안산, 고양), 인천" 같은 지역 목록에 area 가 들어 있는가.
+     *
+     * 괄호 안은 세부 구역이라 떼어내고 시/도 이름만 남긴 뒤, **양방향 부분일치**로 본다.
+     * t6 는 "전북자치도", Geocoder 는 "전북특별자치도"→"전북" 처럼 길이가 서로 달라서
+     * 한 방향만 보면 놓친다. 한 글자 토큰은 우연히 걸리므로 제외한다.
+     */
+    private fun areaMatches(areas: String, area: String): Boolean =
+        areas.split(',')
+            .map { it.substringBefore('(').replace(")", "").trim() }
+            .any { it.length >= 2 && (it.contains(area) || area.contains(it)) }
 
     // ── 초단기예보(기온·하늘·강수) ───────────────────────────────
 
@@ -298,6 +352,7 @@ object WeatherRepository {
         put("pty", w.pty)
         put("warn", w.warning ?: JSONObject.NULL)
         put("place", w.placeLabel)
+        put("warnArea", w.warningArea)
         put("nx", nx)
         put("ny", ny)
     }.toString()
@@ -311,7 +366,8 @@ object WeatherRepository {
             sky = o.optInt("sky", 1),
             pty = o.optInt("pty", 0),
             warning = if (o.isNull("warn")) null else o.optString("warn").takeIf { it.isNotBlank() },
-            placeLabel = o.optString("place").takeIf { it.isNotBlank() } ?: "신정동"
+            placeLabel = o.optString("place").takeIf { it.isNotBlank() } ?: "신정동",
+            warningArea = o.optString("warnArea").takeIf { it.isNotBlank() } ?: "서울"
         )
     }.getOrNull()
 }

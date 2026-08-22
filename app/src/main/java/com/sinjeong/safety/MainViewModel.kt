@@ -97,6 +97,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _crewName = MutableStateFlow(prefs.getString("crew_name", null))
     val crewName: StateFlow<String?> = _crewName.asStateFlow()
 
+    // 이 기기가 한 번이라도 사번+PIN 으로 확인된 적이 있는가 (기기 로컬 표식).
+    // Firebase Auth 는 세션이 하나뿐이라 관리자로 로그인하면 승무원 세션이 대체되고,
+    // 관리자 로그아웃 후에는 아무 계정도 없는 상태가 된다. 그때 로그인 게이트가 다시 뜨면
+    // 승무원은 영문도 모른 채 처음부터 로그인해야 한다 — 그걸 막는 표식이다.
+    private val _crewVerifiedOnce =
+        MutableStateFlow(prefs.getBoolean("crew_verified_once", false))
+
+    /** 사번+PIN 확인에 성공한 순간 표식을 남긴다 (등록·로그인 공통) */
+    private fun markCrewVerified() {
+        _crewVerifiedOnce.value = true
+        prefs.edit().putBoolean("crew_verified_once", true).apply()
+    }
+
     // ── 날씨 칩 (기온·하늘·기상특보) ────────────────────────────
     private val _weather = MutableStateFlow<WeatherNow?>(null)
     val weather: StateFlow<WeatherNow?> = _weather.asStateFlow()
@@ -143,10 +156,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _requireLogin = MutableStateFlow(false)
     val requireLogin: StateFlow<Boolean> = _requireLogin.asStateFlow()
 
-    /** 로그인 화면을 띄워야 하는가 (강제 ON + 승무원 미로그인 + 관리자도 아님) */
+    /** 로그인 화면을 띄워야 하는가 (강제 ON + 승무원 미로그인 + 관리자도 아님 + 확인된 적 없는 기기) */
     val needCrewLogin: StateFlow<Boolean> =
-        combine(_requireLogin, _crewEmpNo, _isAdmin) { require, empNo, admin ->
-            require && empNo == null && !admin
+        // 한 번이라도 사번+PIN 으로 확인된 기기라면, 관리자 로그아웃처럼 세션이 끊겨도 앱을 막지 않는다.
+        // 로그인 게이트는 '처음 쓰는 기기'를 거르는 장치이지 매번 다시 로그인시키는 장치가 아니다.
+        // 쓰기(확인·댓글·질문)는 여전히 로그인이 필요하다 — 보안 규칙이 서버에서 막는다.
+        combine(_requireLogin, _crewEmpNo, _isAdmin, _crewVerifiedOnce) { require, empNo, admin, verified ->
+            require && empNo == null && !admin && !verified
         }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _readIds = MutableStateFlow(
@@ -358,8 +374,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun logout() {
         repo.logout()
         _isAdmin.value = false
+        // 실제로 Firebase 세션이 사라졌으니 사번도 비운다(정직해야 한다).
+        // 다만 crew_verified_once 는 남겨 둔다 — 승무원이 나가겠다고 한 적이 없으므로
+        // 로그인 게이트로 튕기지 않고 홈 화면이 그대로 보여야 한다.
         _crewEmpNo.value = null
-        _message.value = UiMessage("로그아웃했습니다")
+        _message.value = UiMessage("관리자 모드를 종료했습니다. 확인·댓글을 쓰려면 다시 로그인하세요.")
     }
 
     // ── 승무원 로그인 ────────────────────────────────────────────
@@ -384,6 +403,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _crewEmpNo.value = empNo.trim()
                 _crewName.value = name.trim()
                 prefs.edit().putString("crew_name", name.trim()).apply()
+                markCrewVerified()
                 syncFavorites()
                 _message.value = UiMessage("${name.trim()} 님, 환영합니다")
                 onSuccess()
@@ -406,6 +426,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _crewName.value = n
                     prefs.edit().putString("crew_name", n).apply()
                 }
+                markCrewVerified()
                 syncFavorites()
                 onSuccess()
             } catch (e: com.google.firebase.auth.FirebaseAuthInvalidUserException) {
@@ -425,6 +446,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         crewRepo.signOut()
         _crewEmpNo.value = null
         _isAdmin.value = false
+        // 관리자 로그아웃(logout)과 달리 승무원이 스스로 나간 것이므로 기기 표식도 지운다.
+        // 의도적으로 나갔으면 다시 로그인 게이트가 뜨는 게 맞다 (폰을 넘겨줄 때 등).
+        _crewVerifiedOnce.value = false
+        prefs.edit().putBoolean("crew_verified_once", false).apply()
         _message.value = UiMessage("로그아웃했습니다")
     }
 

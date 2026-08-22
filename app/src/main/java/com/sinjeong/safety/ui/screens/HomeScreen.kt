@@ -4,6 +4,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.*
 import android.content.Intent
 import android.net.Uri
@@ -38,7 +41,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -181,8 +186,14 @@ fun HomeScreen(
 
             // 출무점호 — 출근해서 제일 먼저 볼 것이므로 카테고리 바로 아래.
             item {
+                // 무조건 최신(firstOrNull)을 넘기면, 항목 하나 없는 빈 문서가 맨 위에 있을 때
+                // 홈이 텅 빈 카드로 보인다(테스트로 올린 빈 점호가 실제로 그랬다).
+                // 그래서 내용이 있는 최신 건을 먼저 고르고, 그런 게 하나도 없을 때만 최신으로 떨어진다.
+                val briefingToShow = briefings.firstOrNull {
+                    it.items.isNotEmpty() || it.attachments.isNotEmpty() || it.links.isNotEmpty()
+                } ?: briefings.firstOrNull()
                 BriefingCard(
-                    briefing = briefings.firstOrNull(),
+                    briefing = briefingToShow,
                     isAdmin = isAdmin,
                     onWrite = onBriefingWrite,
                     onList = onBriefingList
@@ -477,34 +488,53 @@ private fun MascotBanner() {
 }
 
 // ── 검색창 ──────────────────────────────────────────────────────
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        singleLine = true,
-        placeholder = {
-            // 무엇을 칠 수 있는지 감이 오도록 설명 대신 실제 검색어 예시 하나를 보여 준다
-            Text("예) 승강장안전문", color = AppColors.TextSecondary, fontSize = 13.sp)
-        },
-        textStyle = LocalTextStyle.current.copy(fontSize = 13.5.sp),
-        leadingIcon = {
-            Icon(Icons.Default.Search, null, tint = AppColors.Primary, modifier = Modifier.size(18.dp))
-        },
+    // 기본 높이(56dp)는 홈에서 자리를 너무 먹는다. 그런데 M3 OutlinedTextField 는 최소 높이 56dp와
+    // 거기에 맞춘 고정 content padding 을 갖고 있어서, 높이만 46dp로 눌러 놓으면 글자·placeholder·
+    // 아이콘이 세로로 눌리거나 잘린다("글자 크기가 안 맞는다"의 진짜 원인).
+    // 그래서 기본값과 싸우는 대신 BasicTextField + 직접 만든 껍데기로 높이를 우리가 정한다.
+    val interactionSource = remember { MutableInteractionSource() }
+    val focused by interactionSource.collectIsFocusedAsState()
+
+    Surface(
         shape = RoundedCornerShape(50),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = Color.White,
-            unfocusedContainerColor = Color.White,
-            focusedBorderColor = AppColors.Primary,
-            unfocusedBorderColor = AppColors.Divider
+        color = Color.White,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp, if (focused) AppColors.Primary else AppColors.Divider
         ),
-        // 기본 높이(56dp)는 홈에서 자리를 너무 먹는다. 출무점호를 위로 올리려고 여기서 아낀다.
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .height(46.dp)
-    )
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Search, null, tint = AppColors.Primary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = TextStyle(fontSize = 14.sp, color = AppColors.TextPrimary),
+                cursorBrush = SolidColor(AppColors.Primary),
+                interactionSource = interactionSource,
+                modifier = Modifier.weight(1f),
+                decorationBox = { inner ->
+                    // 비어 있을 때만 예시를 겹쳐 그린다. 무엇을 칠 수 있는지 감이 오도록
+                    // 설명 대신 실제 검색어 예시 하나를 보여 준다.
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (query.isEmpty()) {
+                            Text("예) 승강장안전문", fontSize = 14.sp, color = AppColors.TextSecondary)
+                        }
+                        inner()
+                    }
+                }
+            )
+        }
+    }
 }
 
 // ── 카테고리 카드 ───────────────────────────────────────────────
@@ -1067,6 +1097,10 @@ fun BriefingCard(
     }
 
     var expanded by remember { mutableStateOf(false) }
+    // 오늘 것인지 지난 것인지 제목·뱃지·하단 안내가 모두 같은 판정을 써야 해서 여기서 한 번만 구한다.
+    // 문서 id가 yyyyMMdd라 오늘 날짜와 문자열 비교로 끝난다.
+    val todayId = remember { SimpleDateFormat("yyyyMMdd", Locale.KOREA).format(java.util.Date()) }
+    val isToday = briefing.id == todayId
     val hidden = (briefing.items.size - collapseLimit).coerceAtLeast(0)
     val shown = if (expanded || hidden == 0) briefing.items else briefing.items.take(collapseLimit)
 
@@ -1081,17 +1115,26 @@ fun BriefingCard(
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // 오늘 것인지 지난 것인지 제목에서 바로 알 수 있어야 한다.
-                // 문서 id가 yyyyMMdd라 오늘 날짜와 비교하면 그만이다.
-                val todayId = remember {
-                    SimpleDateFormat("yyyyMMdd", Locale.KOREA).format(java.util.Date())
-                }
                 Text(
-                    if (briefing.id == todayId) "오늘 출무점호" else "최근 출무점호",
+                    if (isToday) "오늘 출무점호" else "최근 출무점호",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = AppColors.Primary
                 )
                 Spacer(Modifier.width(8.dp))
+                // 제목만으로는 '최근'을 흘려보기 쉬워서, 지난 자료일 땐 날짜 앞에 눈에 띄는 표를 단다.
+                if (!isToday) {
+                    Text(
+                        "지난 자료",
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF8A3D00),
+                        modifier = Modifier
+                            .background(Color(0xFFFFF1E6), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
                 Text(
                     briefing.dateText,
                     fontSize = 13.sp,
@@ -1113,7 +1156,17 @@ fun BriefingCard(
             }
 
             Spacer(Modifier.height(10.dp))
-            shown.forEach { BriefingItemRow(it) }
+            // 첨부·링크만 있고 지적사항이 없는 점호도 있다. 그 자리가 그냥 비면
+            // 로딩이 덜 된 건지 원래 없는 건지 알 수가 없어 한 줄로 못 박아 준다.
+            if (shown.isEmpty()) {
+                Text(
+                    "등록된 지적사항이 없습니다",
+                    fontSize = 13.sp,
+                    color = AppColors.TextSecondary
+                )
+            } else {
+                shown.forEach { BriefingItemRow(it) }
+            }
 
             if (hidden > 0) {
                 Text(
@@ -1152,6 +1205,23 @@ fun BriefingCard(
                         .align(Alignment.End)
                         .clickable(onClick = onList)
                         .padding(horizontal = 2.dp, vertical = 2.dp)
+                )
+            }
+
+            // 오늘 자가 아직 없으면 관리자에게만 올릴 자리를 준다.
+            // 승무원에게는 어차피 권한이 없어 눌러도 소용없는 버튼이라 감춘다.
+            if (!isToday && isAdmin) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "오늘 출무점호 올리기",
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AppColors.TagOpsFg,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(AppColors.TagOpsBg)
+                        .clickable(onClick = onWrite)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
         }
