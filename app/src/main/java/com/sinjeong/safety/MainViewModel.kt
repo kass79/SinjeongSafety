@@ -31,7 +31,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
@@ -234,27 +233,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 .toList()
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    // ── 지난 자료 아카이브 (연도 → 월 묶음) ──────────────────
-    data class ArchiveMonth(val month: Int, val posts: List<Post>)
-    data class ArchiveYear(val year: Int, val total: Int, val months: List<ArchiveMonth>)
-
-    val archive: StateFlow<List<ArchiveYear>> =
-        filteredPosts.map { posts ->
-            val cal = java.util.Calendar.getInstance()
-            posts.mapNotNull { post ->
-                val d = post.effectiveDate?.toDate() ?: return@mapNotNull null
-                cal.time = d
-                Triple(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1, post)
-            }
-            .groupBy { it.first }                     // 연도별
-            .toSortedMap(reverseOrder())              // 최신 연도부터
-            .map { (year, rows) ->
-                val months = rows.groupBy { it.second }
-                    .toSortedMap(reverseOrder())      // 최신 월부터
-                    .map { (m, list) -> ArchiveMonth(m, list.map { it.third }) }
-                ArchiveYear(year, rows.size, months)
-            }
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    // 지난 자료 아카이브(연도→월 묶음)는 걷어냈다. 게시물이 25건뿐이라 아카이브를 열어도
+    // 연도 하나에 월 3개가 접혀 있을 뿐이고, 그걸 보려고 화면 전환 + 펼치기 세 번을 눌러야 했다.
+    // 홈 목록에 월 구분선(HomeScreen.MonthDivider)을 넣는 쪽이 스크롤 한 번으로 끝난다.
 
     init {
         // 로그인 강제 스위치를 서버에서 확인 (실패 시 false 유지 → 앱은 그대로 열린다)

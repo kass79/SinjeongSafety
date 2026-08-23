@@ -15,8 +15,7 @@ import android.os.Build
 import android.widget.Toast
 import com.sinjeong.safety.BuildConfig
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -88,6 +87,30 @@ fun Post.isNew(readIds: Set<String>): Boolean {
     return within3Days && id !in readIds
 }
 
+/** 목록 월 구분선용 '연월' 키(yyyyMM). 자료 날짜가 없는 글은 null — 구분선 판정에서 빠진다. */
+private fun Post.monthKey(): String? =
+    effectiveDate?.toDate()?.let { SimpleDateFormat("yyyyMM", Locale.KOREA).format(it) }
+
+/** 게시물 목록의 월 구분선. 출무점호 목록(BriefingListScreen)의 MonthHeader와 같은 톤. */
+@Composable
+private fun MonthDivider(ym: String, count: Int) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            "${ym.take(4)}년 ${ym.substring(4).toInt()}월",
+            fontSize = 13.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = AppColors.TextSecondary,
+            modifier = Modifier.weight(1f)
+        )
+        Text("${count}건", fontSize = 12.sp, color = AppColors.TextHint)
+    }
+}
+
 @Composable
 fun categoryColors(category: String): Pair<Color, Color> = when (category) {
     Categories.HUMAN_ERROR -> Color(0xFFFDF0E3) to Color(0xFFF57C00)
@@ -112,8 +135,6 @@ fun HomeScreen(
 ) {
     val posts by vm.filteredPosts.collectAsState()
     val briefings by vm.briefings.collectAsState()
-    // 아카이브 목록도 여기서 구독한다. LazyColumn 안에서는 collectAsState를 쓸 수 없다.
-    val archiveYears by vm.archive.collectAsState()
     val isLoading by vm.isLoading.collectAsState()
     val isAdmin by vm.isAdmin.collectAsState()
     val selectedCategory by vm.selectedCategory.collectAsState()
@@ -122,18 +143,14 @@ fun HomeScreen(
     val favoritesOnly by vm.showFavoritesOnly.collectAsState()
     val weather by vm.weather.collectAsState()
     val readIds by vm.readIds.collectAsState()
-    val listState = rememberLazyListState()
     var showLogoutDialog by remember { mutableStateOf(false) }
-    // 지난 자료 보기 모드 · 펼친 '연도-월' 키 목록
-    var showArchive by remember { mutableStateOf(false) }
-    var expandedKeys by remember { mutableStateOf(setOf<String>()) }
 
-    // 전환 버튼이 목록 아래에 있으므로, 누르면 결과가 시작되는 위치로 올려준다.
-    // 목록 앞에 놓인 고정 항목 수다 — 헤더·마스코트·검색·카테고리·출무점호·즐겨찾기칩 여섯.
-    // 위에 item을 하나 더 끼우면 이 숫자도 같이 올려야 엉뚱한 데로 스크롤되지 않는다.
-    LaunchedEffect(showArchive) {
-        listState.animateScrollToItem(if (showArchive) 6 else 0)
-    }
+    // 게시물이 25건뿐이고 전부 한 해에 몰려 있어 '지난 자료 보기'(연도▸월 접기) 화면은
+    // 걷어냈다. 25건 보자고 화면 전환 + 펼치기를 세 번 누르느니 그냥 스크롤이 빠르고,
+    // 그 화면 때문에 필요했던 animateScrollToItem 고정 인덱스 보정이 이미 두 번 버그를 냈다.
+    // 대신 아래 목록에 '연-월'이 바뀌는 지점마다 구분선을 넣는다.
+    // 월별 건수는 목록이 바뀔 때만 다시 센다(필터·검색이 걸리면 걸러진 목록 기준으로 재계산).
+    val monthCounts = remember(posts) { posts.groupingBy { it.monthKey() }.eachCount() }
 
     Scaffold(
         containerColor = AppColors.Background,
@@ -150,7 +167,6 @@ fun HomeScreen(
         }
     ) { padding ->
         LazyColumn(
-            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
@@ -243,36 +259,20 @@ fun HomeScreen(
                         }
                     }
                 }
-            } else if (showArchive) {
-                // 지난 자료: 연도 ▸ 월 접기 목록
-                items(archiveYears, key = { it.year }) { y ->
-                    ArchiveYearBlock(
-                        year = y,
-                        expandedKeys = expandedKeys,
-                        onToggle = { k ->
-                            expandedKeys = if (k in expandedKeys) expandedKeys - k else expandedKeys + k
-                        },
-                        readIds = readIds,
-                        onPostClick = onPostClick
-                    )
-                }
             } else {
-                items(posts, key = { it.id }) { post ->
+                // 구분선은 별도 item{}으로 쪼개지 않고 카드와 같은 item 안에서 앞에 그린다
+                // (쪼개면 키 관리가 복잡해진다). 날짜 없는 글은 판정에서 빼고 카드만 그린다.
+                itemsIndexed(posts, key = { _, p -> p.id }) { index, post ->
+                    val key = post.monthKey()
+                    if (key != null && (index == 0 || posts[index - 1].monthKey() != key)) {
+                        MonthDivider(key, monthCounts[key] ?: 0)
+                    }
                     PostCard(
                         post = post,
                         isNew = post.isNew(readIds),
                         onClick = { onPostClick(post) }
                     )
                 }
-            }
-
-
-            // 피드 ↔ 지난 자료 전환 (의견 보내기 바로 위)
-            item {
-                ArchiveToggle(
-                    showArchive = showArchive,
-                    onToggle = { showArchive = !showArchive }
-                )
             }
 
             // 목록 끝: 의견 보내기
@@ -894,159 +894,6 @@ private fun openCalendarApp(context: Context) {
             } catch (e2: Exception) {
                 Toast.makeText(context, "캘린더 앱을 열 수 없어요", Toast.LENGTH_SHORT).show()
             }
-        }
-    }
-}
-
-
-/** 피드 ↔ 지난 자료 전환 버튼 */
-@Composable
-private fun ArchiveToggle(showArchive: Boolean, onToggle: () -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = if (showArchive) AppColors.Primary else Color.White,
-        shadowElevation = 1.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clickable(onClick = onToggle)
-    ) {
-        Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(if (showArchive) "\uD83D\uDCC2" else "\uD83D\uDCC1", fontSize = 17.sp)
-            Spacer(Modifier.width(11.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    if (showArchive) "최신 공지로 돌아가기" else "지난 자료 보기",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (showArchive) Color.White else AppColors.TextPrimary
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    if (showArchive) "연도·월별로 정리된 목록을 보고 있어요"
-                    else "연도와 월로 묶어서 지난 자료를 찾아봐요",
-                    fontSize = 11.5.sp,
-                    color = if (showArchive) Color.White.copy(alpha = 0.85f) else AppColors.TextSecondary
-                )
-            }
-            Text(
-                if (showArchive) "\u2715" else "\u203A",
-                fontSize = 16.sp,
-                color = if (showArchive) Color.White else AppColors.TextSecondary
-            )
-        }
-    }
-}
-
-/** 아카이브 한 해 블록: 2026년 ▸ 3월(12건) 형태로 접었다 펼친다 */
-@Composable
-private fun ArchiveYearBlock(
-    year: MainViewModel.ArchiveYear,
-    expandedKeys: Set<String>,
-    onToggle: (String) -> Unit,
-    readIds: Set<String>,
-    onPostClick: (Post) -> Unit
-) {
-    Column(Modifier.padding(horizontal = 16.dp)) {
-        // 연도 헤더
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable { onToggle("y${'$'}{year.year}") }
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                if ("y${'$'}{year.year}" in expandedKeys) "\u25BE" else "\u25B8",
-                fontSize = 13.sp, color = AppColors.Primary
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "${'$'}{year.year}년",
-                fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = AppColors.TextPrimary
-            )
-            Spacer(Modifier.width(7.dp))
-            Text("${'$'}{year.total}건", fontSize = 12.sp, color = AppColors.TextHint)
-        }
-        if ("y${'$'}{year.year}" in expandedKeys) {
-            year.months.forEach { m ->
-                val key = "m${'$'}{year.year}-${'$'}{m.month}"
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { onToggle(key) }
-                        .padding(start = 20.dp, top = 9.dp, bottom = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        if (key in expandedKeys) "\u25BE" else "\u25B8",
-                        fontSize = 12.sp, color = AppColors.TextSecondary
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "${'$'}{m.month}월",
-                        fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppColors.TextPrimary
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text("(${'$'}{m.posts.size}건)", fontSize = 12.sp, color = AppColors.TextHint)
-                }
-                if (key in expandedKeys) {
-                    m.posts.forEach { post ->
-                        ArchiveRow(post = post, isNew = post.isNew(readIds)) { onPostClick(post) }
-                    }
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-        }
-        HorizontalDivider(color = AppColors.Divider)
-    }
-}
-
-/** 아카이브 목록의 한 줄 (피드 카드보다 조밀하게) */
-@Composable
-private fun ArchiveRow(post: Post, isNew: Boolean, onClick: () -> Unit) {
-    val (bg, fg) = categoryColors(post.category)
-    Surface(
-        shape = RoundedCornerShape(11.dp),
-        color = Color.White,
-        shadowElevation = 1.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 34.dp, end = 2.dp, top = 3.dp, bottom = 3.dp)
-            .clickable(onClick = onClick)
-    ) {
-        Row(
-            Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(color = bg, shape = RoundedCornerShape(5.dp)) {
-                Text(
-                    Categories.short(post.category),
-                    color = fg, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-            Spacer(Modifier.width(9.dp))
-            Text(
-                post.title,
-                fontSize = 13.sp, fontWeight = FontWeight.Bold, color = AppColors.TextPrimary,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            if (isNew) {
-                Spacer(Modifier.width(6.dp))
-                Text("NEW", fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, color = AppColors.NewBadge)
-            }
-            Spacer(Modifier.width(8.dp))
-            Text(
-                post.effectiveDate?.toDate()?.let {
-                    SimpleDateFormat("MM.dd", Locale.KOREA).format(it)
-                } ?: "",
-                fontSize = 11.sp, color = AppColors.TextHint
-            )
         }
     }
 }
