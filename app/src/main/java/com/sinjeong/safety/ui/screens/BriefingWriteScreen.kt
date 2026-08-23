@@ -328,8 +328,15 @@ fun BriefingWriteScreen(vm: MainViewModel, onBack: () -> Unit) {
                         )
                         Spacer(Modifier.height(8.dp))
                     }
-                    LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                        items(briefings.take(10), key = { it.id }) { b ->
+                    // 목록 화면과 같은 규칙으로 월별로 묶는다(문서 id 앞 6자리 = yyyyMM).
+                    // briefings 가 이미 최신순이라 groupBy(LinkedHashMap)의 순서를 그대로 쓴다.
+                    val byMonth = briefings.take(30).groupBy { b ->
+                        if (b.id.length == 8 && b.id.all { c -> c.isDigit() }) b.id.take(6) else "기타"
+                    }
+                    LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                        byMonth.forEach { (ym, group) ->
+                        item(key = "hdr_$ym") { PastMonthHeader(ym, group.size) }
+                        items(group, key = { it.id }) { b ->
                             Column(
                                 Modifier
                                     .fillMaxWidth()
@@ -356,6 +363,7 @@ fun BriefingWriteScreen(vm: MainViewModel, onBack: () -> Unit) {
                                 )
                             }
                         }
+                        }
                     }
                 }
             },
@@ -363,6 +371,27 @@ fun BriefingWriteScreen(vm: MainViewModel, onBack: () -> Unit) {
                 TextButton(onClick = { showPast = false }) { Text("취소") }
             }
         )
+    }
+}
+
+// 목록 화면의 MonthHeader 와 같은 톤. 다이얼로그 안이라 좁아서 좌우 패딩만 줄였다.
+@Composable
+private fun PastMonthHeader(ym: String, count: Int) {
+    val label = if (ym.length == 6) "${ym.take(4)}년 ${ym.substring(4).toInt()}월" else "기타"
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = AppColors.TextSecondary,
+            modifier = Modifier.weight(1f)
+        )
+        Text("${count}건", fontSize = 11.5.sp, color = AppColors.TextHint)
     }
 }
 

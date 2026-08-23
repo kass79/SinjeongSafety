@@ -373,17 +373,22 @@ private fun HeaderBar(
             modifier = Modifier.clickable { showWeatherDialog = true }
         ) {
             if (warning != null) {
+                // 저장소가 특보 여러 건을 " · " 로 이어 붙여 준다.
+                // 뱃지는 "특보가 있다"는 신호 역할만 하므로 첫 건 + "+N" 으로 줄이고,
+                // 전문(전체 목록)은 칩을 눌렀을 때 뜨는 다이얼로그가 그대로 보여준다.
+                val warns = warning.split(" · ").filter { it.isNotBlank() }
+                val badgeText =
+                    if (warns.size > 1) warns[0] + " +" + (warns.size - 1)
+                    else warning
                 Text(
-                    warning,
+                    badgeText,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF8A3D00),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        // 헤더 한 줄에 캘린더·설정·방패가 같이 있어 가로가 빠듯하다.
-                        // 특보가 둘 이상이면 길어지므로 폭을 묶고 말줄임한다.
-                        .widthIn(max = 64.dp)
+                        // 첫 항목 하나 + "+N" 이라 폭이 예측 가능하다 → widthIn 제한 없음.
                         .clip(RoundedCornerShape(6.dp))
                         .background(Color(0xFFFFF1E6))
                         .padding(horizontal = 5.dp, vertical = 1.dp)
