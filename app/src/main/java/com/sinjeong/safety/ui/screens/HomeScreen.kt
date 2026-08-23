@@ -323,17 +323,19 @@ private fun HeaderBar(
             contentDescription = "마스코트",
             contentScale = ContentScale.Crop,
             modifier = Modifier
-                .size(if (narrow) 40.dp else 48.dp)
+                .size(if (narrow) 38.dp else 44.dp)
                 .clip(RoundedCornerShape(15.dp))
                 .background(Color(0xFFE8F0FC))
                 .border(2.dp, Color.White, RoundedCornerShape(15.dp))
         )
-        Spacer(Modifier.width(if (narrow) 7.dp else 11.dp))
+        Spacer(Modifier.width(if (narrow) 7.dp else 10.dp))
         Column(Modifier.weight(1f)) {
-            // maxLines 없이 두면 폭이 모자랄 때 제목이 세 줄까지 늘어나 헤더가 화면을 먹는다
+            // maxLines 없이 두면 폭이 모자랄 때 제목이 세 줄까지 늘어나 헤더가 화면을 먹는다.
+            // 19sp 였을 때는 넓은 화면에서도 제목 끝이 날씨 칩에 닿아 말줄임이 걸렸다.
+            // 17sp 로 낮추니 사업소명이 온전히 보이면서 칩·아이콘과 무게가 맞는다.
             Text(
                 "신정승무사업소",
-                fontSize = if (narrow) 16.5.sp else 19.sp,
+                fontSize = if (narrow) 15.5.sp else 17.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = AppColors.Primary,
                 maxLines = 1,
@@ -353,7 +355,7 @@ private fun HeaderBar(
                     } else {
                         if (isAdmin) "관리자님 (관리자 모드)" else "실시간 안전정보 공유중"
                     },
-                    fontSize = 12.sp,
+                    fontSize = if (narrow) 11.sp else 11.5.sp,
                     color = AppColors.TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
