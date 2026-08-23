@@ -249,6 +249,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             repo.postsFlow().collect { result ->
                 _isLoading.value = false
                 result.onSuccess { _posts.value = it }
+                // 실패를 삼키면 목록이 그냥 비어 보이고 끝이라 원인을 알 수가 없다.
+                // 출무점호가 색인 오류로 몇 주 동안 조용히 죽어 있던 게 바로 이 패턴이었다.
+                result.onFailure { android.util.Log.w("Posts", "게시물 조회 실패", it) }
                 result.onFailure {
                     _message.value = UiMessage("게시물을 불러오지 못했습니다: ${it.localizedMessage}", true)
                 }
@@ -258,6 +261,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             questionRepo.questionsFlow().collect { result ->
                 result.onSuccess { _questions.value = it }
+                result.onFailure { android.util.Log.w("Questions", "질의응답 조회 실패", it) }
             }
         }
         // 출무점호도 마찬가지 — 못 읽으면 홈 카드가 안 보일 뿐이다.
