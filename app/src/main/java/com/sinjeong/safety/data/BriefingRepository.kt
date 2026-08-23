@@ -3,7 +3,6 @@ package com.sinjeong.safety.data
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -49,15 +48,19 @@ class BriefingRepository {
 
     /** 최근 것부터. 문서 id 가 곧 날짜라 id 내림차순이면 최신순이다. */
     fun briefingsFlow(limit: Long = 60): Flow<Result<List<Briefing>>> = callbackFlow {
-        val reg = col.orderBy(FieldPath.documentId(), Query.Direction.DESCENDING)
+        // 문서 id(__name__) 내림차순 정렬은 Firestore 가 별도 색인을 요구한다(FAILED_PRECONDITION).
+        // 색인을 새로 배포하느니, 게시물과 똑같이 createdAt 으로 받아 오고(단일 필드라 색인이 자동)
+        // 순서만 앱에서 문서 id 기준으로 다시 잡는다. 하루 한 건이라 정렬 비용은 없다시피 하고,
+        // 등록 시각과 점호 날짜가 다를 수 있어(지난 자료를 나중에 올림) id 기준이 맞다.
+        val reg = col.orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(limit)
             .addSnapshotListener { snap, err ->
                 if (err != null) {
                     trySend(Result.failure(err)); return@addSnapshotListener
                 }
-                val list = snap?.documents?.mapNotNull {
+                val list = (snap?.documents?.mapNotNull {
                     runCatching { toBriefing(it) }.getOrNull()
-                } ?: emptyList()
+                } ?: emptyList()).sortedByDescending { it.id }
                 trySend(Result.success(list))
             }
         awaitClose { reg.remove() }

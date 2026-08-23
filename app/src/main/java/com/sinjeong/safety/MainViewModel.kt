@@ -283,6 +283,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             briefingRepo.briefingsFlow().collect { result ->
                 result.onSuccess { _briefings.value = it }
+                // 실패를 조용히 삼키면 홈 카드가 그냥 안 보이고 끝이라 원인을 알 수가 없다.
+                // 실제로 색인 없는 정렬 쿼리가 계속 거부되는데 몇 주 동안 눈치채지 못했다.
+                result.onFailure { android.util.Log.w("Briefing", "출무점호 조회 실패", it) }
             }
         }
     }
