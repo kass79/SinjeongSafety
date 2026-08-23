@@ -255,13 +255,18 @@ class PostRepository {
         awaitClose { registration.remove() }
     }
 
-    /** 댓글 작성. 목록에 보여줄 댓글 수도 함께 올린다. */
+    /**
+     * 댓글 작성. 목록에 보여줄 댓글 수도 함께 올린다.
+     * [parentId] 가 비어 있으면 원댓글, 값이 있으면 그 댓글의 답글이다(1단계까지만).
+     * commentCount 는 원댓글·답글을 구분하지 않는 총 개수다.
+     */
     suspend fun addComment(
         postId: String,
         content: String,
         authorName: String,
         authorEmpNo: String,
-        isAdmin: Boolean
+        isAdmin: Boolean,
+        parentId: String = ""
     ) {
         postsRef.document(postId).collection("comments").add(
             mapOf(
@@ -269,6 +274,7 @@ class PostRepository {
                 "authorName" to authorName,
                 "authorEmpNo" to authorEmpNo,
                 "isAdmin" to isAdmin,
+                "parentId" to parentId,
                 "createdAt" to FieldValue.serverTimestamp()
             )
         ).await()

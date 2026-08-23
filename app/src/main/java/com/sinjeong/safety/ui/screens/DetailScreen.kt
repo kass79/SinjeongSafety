@@ -76,6 +76,9 @@ fun DetailScreen(
     val commentsResult by commentFlow.collectAsState(initial = Result.success(emptyList()))
     val comments = commentsResult.getOrDefault(emptyList())
     var commentInput by remember { mutableStateOf("") }
+    // 답글 대상. null 이면 원댓글을 쓰는 중이다. 깊이는 1단계까지만이라
+    // 여기 담기는 건 언제나 원댓글이다(답글에는 답글 버튼을 두지 않는다).
+    var replyTo by remember { mutableStateOf<Comment?>(null) }
 
     LaunchedEffect(postId) { vm.markRead(postId) }
 
@@ -126,43 +129,78 @@ fun DetailScreen(
         bottomBar = {
             if (post != null) {
                 if (loggedIn) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .background(Color.White)
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = commentInput,
-                            onValueChange = { commentInput = it },
-                            placeholder = {
-                                Text("댓글을 입력하세요", color = AppColors.TextHint, fontSize = 14.sp)
-                            },
-                            maxLines = 4,
-                            shape = RoundedCornerShape(20.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = Color.White,
-                                unfocusedContainerColor = Color.White,
-                                focusedBorderColor = AppColors.Primary,
-                                unfocusedBorderColor = AppColors.Divider
-                            ),
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        IconButton(
-                            onClick = {
-                                if (commentInput.isNotBlank())
-                                    vm.addComment(postId, commentInput) { commentInput = "" }
-                            },
-                            enabled = commentInput.isNotBlank()
+                    Column(Modifier.fillMaxWidth().background(Color.White)) {
+                        // 답글 대상 표시줄 — 지금 누구에게 쓰는 중인지 보이지 않으면
+                        // 답글 버튼을 눌러 놓고도 원댓글처럼 느껴진다.
+                        replyTo?.let { target ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(AppColors.Background)
+                                    .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "${target.authorName.ifBlank { "이름 미등록" }} 님에게 답글",
+                                    fontSize = 12.5.sp,
+                                    color = AppColors.TextSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    "✕",
+                                    fontSize = 14.sp,
+                                    color = AppColors.TextSecondary,
+                                    modifier = Modifier
+                                        .clickable { replyTo = null }
+                                        .padding(horizontal = 10.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Send,
-                                "댓글 등록",
-                                tint = if (commentInput.isNotBlank()) AppColors.Primary
-                                       else AppColors.TextHint
+                            OutlinedTextField(
+                                value = commentInput,
+                                onValueChange = { commentInput = it },
+                                placeholder = {
+                                    Text(
+                                        if (replyTo != null) "답글을 입력하세요" else "댓글을 입력하세요",
+                                        color = AppColors.TextHint, fontSize = 14.sp
+                                    )
+                                },
+                                maxLines = 4,
+                                shape = RoundedCornerShape(20.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    focusedBorderColor = AppColors.Primary,
+                                    unfocusedBorderColor = AppColors.Divider
+                                ),
+                                modifier = Modifier.weight(1f)
                             )
+                            Spacer(Modifier.width(6.dp))
+                            IconButton(
+                                onClick = {
+                                    if (commentInput.isNotBlank())
+                                        vm.addComment(postId, commentInput, replyTo?.id ?: "") {
+                                            commentInput = ""
+                                            replyTo = null
+                                        }
+                                },
+                                enabled = commentInput.isNotBlank()
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Send,
+                                    if (replyTo != null) "답글 등록" else "댓글 등록",
+                                    tint = if (commentInput.isNotBlank()) AppColors.Primary
+                                           else AppColors.TextHint
+                                )
+                            }
                         }
                     }
                 } else {
@@ -350,11 +388,40 @@ fun DetailScreen(
                     color = AppColors.TextSecondary
                 )
             } else {
-                comments.forEach { c ->
+                // 원댓글 아래에 그 답글을 붙여서 그린다. Firestore 는 평평한 한 컬렉션이라
+                // (createdAt 오름차순) 이 조립은 화면에서 한다.
+                val roots = comments.filter { it.parentId.isBlank() }
+                val rootIds = roots.map { it.id }.toSet()
+                val repliesOf = comments.filter { it.parentId.isNotBlank() }.groupBy { it.parentId }
+                // 부모가 지워진 답글은 어느 원댓글에도 못 붙는다. 그대로 두면 화면에서
+                // 사라지므로(내용은 남아 있는데 안 보인다) 맨 아래에 원댓글처럼 그린다.
+                val orphans = comments.filter {
+                    it.parentId.isNotBlank() && it.parentId !in rootIds
+                }
+
+                roots.forEach { root ->
+                    CommentRow(
+                        comment = root,
+                        canDelete = vm.canDeleteComment(root),
+                        onDelete = { vm.deleteComment(postId, root) },
+                        onReply = if (loggedIn) ({ replyTo = root }) else null
+                    )
+                    repliesOf[root.id].orEmpty().forEach { reply ->
+                        CommentRow(
+                            comment = reply,
+                            canDelete = vm.canDeleteComment(reply),
+                            onDelete = { vm.deleteComment(postId, reply) },
+                            onReply = null,   // 1단계 깊이 — 답글에는 답글을 달지 않는다
+                            isReply = true
+                        )
+                    }
+                }
+                orphans.forEach { c ->
                     CommentRow(
                         comment = c,
                         canDelete = vm.canDeleteComment(c),
-                        onDelete = { vm.deleteComment(postId, c) }
+                        onDelete = { vm.deleteComment(postId, c) },
+                        onReply = null
                     )
                 }
             }
@@ -383,14 +450,35 @@ fun DetailScreen(
 // ── 댓글 한 줄 ─────────────────────────────────────────────────
 // 질의응답 답변(AnswerRow)과 같은 모양이다. 이니셜 배지·관리자 뱃지 규칙을 맞춰야
 // 두 게시판을 오가는 사람이 같은 화면으로 읽는다.
+// [isReply] 면 한 단계 들여쓰고 배지를 줄여 답글임을 보이게 한다(깊이는 1단계까지만).
+// [onReply] 가 null 이면 답글 버튼을 그리지 않는다(답글 줄, 비로그인).
 @Composable
-private fun CommentRow(comment: Comment, canDelete: Boolean, onDelete: () -> Unit) {
+private fun CommentRow(
+    comment: Comment,
+    canDelete: Boolean,
+    onDelete: () -> Unit,
+    onReply: (() -> Unit)? = null,
+    isReply: Boolean = false
+) {
     Row(
         Modifier
             .fillMaxWidth()
+            .padding(start = if (isReply) 34.dp else 0.dp)
             .padding(vertical = 7.dp)
+            // 세로 구분선이 줄 높이만큼 늘어나도록. 답글이 아닐 땐 굳이 재지 않는다.
+            .then(if (isReply) Modifier.height(IntrinsicSize.Min) else Modifier)
     ) {
-        AuthorInitial(comment.authorName, admin = comment.isAdmin, size = 32)
+        if (isReply) {
+            // 왼쪽 세로선 — 들여쓰기만으로는 답글인지 한눈에 안 들어온다.
+            Box(
+                Modifier
+                    .width(1.5.dp)
+                    .fillMaxHeight()
+                    .background(AppColors.Divider)
+            )
+            Spacer(Modifier.width(10.dp))
+        }
+        AuthorInitial(comment.authorName, admin = comment.isAdmin, size = if (isReply) 26 else 32)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -422,6 +510,18 @@ private fun CommentRow(comment: Comment, canDelete: Boolean, onDelete: () -> Uni
                 color = AppColors.TextPrimary,
                 lineHeight = 21.sp
             )
+            if (onReply != null) {
+                Text(
+                    "답글",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AppColors.Primary,
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .clickable(onClick = onReply)
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                )
+            }
         }
         if (canDelete) {
             Icon(

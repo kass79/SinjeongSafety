@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.*
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -305,8 +306,9 @@ private fun HeaderBar(
     onShieldClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
-    // 폴드7 접은 화면(약 344dp)에서는 오른쪽 아이콘 4개가 190dp 넘게 먹어
-    // 제목에 남는 폭이 거의 없다. 좁으면 마스코트·글자·간격을 한 단계씩 줄인다.
+    // 폴드7 접은 화면(약 344dp)에서는 오른쪽 아이콘들이 폭을 먹어 제목에 남는 자리가 거의 없다.
+    // 좁으면 글자·간격을 한 단계씩 줄인다. 캘린더 아이콘을 빼(배너 클릭으로 옮김) 42dp가 돌아온 만큼
+    // 제목은 15sp까지 쥐어짜지 않고 16.5sp로 되돌렸다.
     val narrow = LocalConfiguration.current.screenWidthDp < 380
     val iconGap = if (narrow) 5.dp else 8.dp
 
@@ -331,7 +333,7 @@ private fun HeaderBar(
             // maxLines 없이 두면 폭이 모자랄 때 제목이 세 줄까지 늘어나 헤더가 화면을 먹는다
             Text(
                 "신정승무사업소",
-                fontSize = if (narrow) 15.sp else 19.sp,
+                fontSize = if (narrow) 16.5.sp else 19.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = AppColors.Primary,
                 maxLines = 1,
@@ -358,10 +360,6 @@ private fun HeaderBar(
                 )
             }
         }
-        // 캘린더 아이콘 → 신정승무캘린더 앱 열기
-        CalendarButton()
-        Spacer(Modifier.width(iconGap))
-
         // 날씨 칩 — 다음(daum) 날씨 위젯처럼 아이콘+기온만 작게.
         // 특보가 있으면 그 위에 작은 주황 뱃지가 한 줄 붙는다(맥박 애니메이션은 뺐다.
         // 칩이 작아지고 뱃지가 눈에 띄므로 움직임까지 얹을 값어치가 없다).
@@ -474,23 +472,39 @@ private fun HeaderBar(
     }
 }
 
-// ── 마스코트 배너: 컴팩트 와이드 (이미지 + 텍스트 오버레이) ────
+// ── 마스코트 배너: 컴팩트 와이드 (이미지 전체가 캘린더 앱 바로가기) ────
 @Composable
 private fun MascotBanner() {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .height(112.dp)
-            .clip(RoundedCornerShape(20.dp))
-    ) {
-        // 배너 이미지에 이미 "슬기로운 승무생활" 문구가 포함되어 있음
-        Image(
-            painter = painterResource(R.drawable.banner_main),
-            contentDescription = "슬기로운 승무생활 - 오늘도 안전운행 출발!",
-            contentScale = ContentScale.Crop,
-            alignment = Alignment.Center,
-            modifier = Modifier.matchParentSize()
+    val context = LocalContext.current
+    Column(Modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .height(112.dp)
+                // clip 을 clickable 보다 먼저 걸어야 눌렀을 때 리플이 둥근 모서리를 넘지 않는다
+                .clip(RoundedCornerShape(20.dp))
+                .clickable { openCalendarApp(context) }
+        ) {
+            // 배너 이미지에 이미 "슬기로운 승무생활" 문구가 들어 있고, 오른쪽 아래는
+            // "신정승무사업소" 로고 자리라 그림 위에 힌트를 얹을 빈 곳이 없다.
+            // 그래서 안내는 그림 '밖'(아래)에 한 줄로 둔다 — 오버레이 금지 규칙도 지키고
+            // 누를 수 있다는 것도 알린다. 헤더에서 캘린더 아이콘을 뺐으므로 이 안내가 유일한 단서다.
+            Image(
+                painter = painterResource(R.drawable.banner_main),
+                contentDescription = "슬기로운 승무생활 - 누르면 신정승무캘린더 앱이 열립니다",
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.Center,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+        Text(
+            "위 배너를 누르면 신정승무캘린더가 열립니다 ›",
+            fontSize = 10.5.sp,
+            color = AppColors.TextHint,
+            modifier = Modifier
+                .align(Alignment.End)
+                .padding(end = 20.dp, top = 4.dp)
         )
     }
 }
@@ -852,45 +866,34 @@ private fun FeedbackCard() {
 private const val CALENDAR_PACKAGE = "com.sinjeong.crewcalendar"
 
 /**
- * 헤더의 작은 달력 아이콘. 오늘 날짜가 숫자로 보여서 살아 있는 느낌을 준다.
- * 누르면 신정승무캘린더 앱을 열고, 설치돼 있지 않으면 플레이스토어로 안내한다.
+ * 신정승무캘린더 앱 열기. 설치돼 있지 않으면 플레이스토어(없으면 웹)로 안내한다.
+ *
+ * 원래 헤더의 달력 아이콘(CalendarButton)이 하던 일인데, 헤더 아이콘이 너무 많아져서
+ * 아이콘을 없애고 마스코트 배너 전체를 누르는 것으로 옮겼다. 로직은 그대로다.
  */
-@Composable
-private fun CalendarButton() {
-    val context = LocalContext.current
-    // 신정승무캘린더의 실제 앱 아이콘을 그대로 보여준다.
-    // 두 앱이 형제 앱임을 한눈에 알 수 있고, 누르면 그 앱이 열린다는 것도 직관적이다.
-    Image(
-        painter = painterResource(R.drawable.icon_crewcalendar),
-        contentDescription = "신정승무캘린더 열기",
-        modifier = Modifier
-            .size(42.dp)
-            .clip(RoundedCornerShape(11.dp))
-            .clickable {
-                val launch = context.packageManager.getLaunchIntentForPackage(CALENDAR_PACKAGE)
-                if (launch != null) {
-                    context.startActivity(launch)
-                } else {
-                    // 아직 안 깔려 있으면 스토어로 (스토어 앱이 없으면 웹으로)
-                    try {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$CALENDAR_PACKAGE"))
-                        )
-                    } catch (e: Exception) {
-                        try {
-                            context.startActivity(
-                                Intent(
-                                    Intent.ACTION_VIEW,
-                                    Uri.parse("https://play.google.com/store/apps/details?id=$CALENDAR_PACKAGE")
-                                )
-                            )
-                        } catch (e2: Exception) {
-                            Toast.makeText(context, "캘린더 앱을 열 수 없어요", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
+private fun openCalendarApp(context: Context) {
+    val launch = context.packageManager.getLaunchIntentForPackage(CALENDAR_PACKAGE)
+    if (launch != null) {
+        context.startActivity(launch)
+    } else {
+        // 아직 안 깔려 있으면 스토어로 (스토어 앱이 없으면 웹으로)
+        try {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$CALENDAR_PACKAGE"))
+            )
+        } catch (e: Exception) {
+            try {
+                context.startActivity(
+                    Intent(
+                        Intent.ACTION_VIEW,
+                        Uri.parse("https://play.google.com/store/apps/details?id=$CALENDAR_PACKAGE")
+                    )
+                )
+            } catch (e2: Exception) {
+                Toast.makeText(context, "캘린더 앱을 열 수 없어요", Toast.LENGTH_SHORT).show()
             }
-    )
+        }
+    }
 }
 
 

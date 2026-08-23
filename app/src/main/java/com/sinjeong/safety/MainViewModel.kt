@@ -552,12 +552,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun commentsFlow(postId: String): Flow<Result<List<Comment>>> = repo.commentsFlow(postId)
 
-    fun addComment(postId: String, content: String, onSuccess: () -> Unit) {
+    /** [parentId] 를 주면 그 댓글의 답글이 된다(1단계까지만). 기본값이라 기존 호출부는 그대로다. */
+    fun addComment(postId: String, content: String, parentId: String = "", onSuccess: () -> Unit) {
         if (content.isBlank()) return
         val (name, empNo) = questionAuthor()
         viewModelScope.launch {
             try {
-                repo.addComment(postId, content, name, empNo, _isAdmin.value)
+                repo.addComment(postId, content, name, empNo, _isAdmin.value, parentId)
                 onSuccess()
             } catch (e: Exception) {
                 _message.value = UiMessage("댓글 등록 실패: ${e.localizedMessage}", true)

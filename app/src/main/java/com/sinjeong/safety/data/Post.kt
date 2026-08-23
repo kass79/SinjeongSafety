@@ -82,7 +82,15 @@ data class Comment(
     val authorName: String = "",
     val authorEmpNo: String = "",
     val isAdmin: Boolean = false,
-    val createdAt: Timestamp? = null
+    val createdAt: Timestamp? = null,
+    /**
+     * 답글이면 그 부모 댓글의 id, 원댓글이면 빈 문자열.
+     * 옛 댓글 문서에는 이 필드가 아예 없으므로 기본값(빈 문자열)이 곧 "원댓글"이 되어
+     * 그대로 호환된다 — 마이그레이션 없이 섞여 있어도 된다.
+     * 깊이는 1단계까지만 쓴다(답글의 답글 없음). 좁은 폰에서 스레드가 깊어지면
+     * 읽기 어렵고, 현장 게시판에 그만큼의 깊이가 필요하지 않다.
+     */
+    val parentId: String = ""
 )
 
 /**
