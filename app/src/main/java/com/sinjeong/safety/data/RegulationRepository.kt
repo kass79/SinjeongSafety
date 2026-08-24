@@ -40,10 +40,15 @@ data class TodayReg(
  */
 object RegulationRepository {
 
-    // 규정집 표시 순서·메타데이터 (고정 4권)
+    // 규정집 표시 순서·메타데이터 (고정 9권) — 운전 실무 규정끼리 모아 둔다
     private val bookMeta = listOf(
         BookMeta("전동차승무원업무예규", "🚇", 0xFFE9F1FD, "우리 승무원 필수", false),
         BookMeta("운전취급규정", "🛤️", 0xFFE9F6ED, "원본 파일 포함(신호기 그림)", true),
+        BookMeta("운전관계직원업무내규", "🧑‍✈️", 0xFFEDE9FB, "기관사·관제 공통 업무", false),
+        BookMeta("운전취급세부요령", "📖", 0xFFE0F2F1, "취급규정의 현장 세부", false),
+        BookMeta("차량기지운전취급내규", "🏭", 0xFFFFF3E0, "기지 구내운전·입환", false),
+        BookMeta("승무원지도운용내규", "🧭", 0xFFFCE4EC, "지도승무·교육훈련", false),
+        BookMeta("운전무사고성적심사규정", "🏅", 0xFFF1F8E9, "무사고 경력·심사", false),
         BookMeta("인사규정", "👤", 0xFFFDF0E3, "임용·승진·전보", false),
         BookMeta("취업규칙", "📋", 0xFFFBF4DC, "근무·휴가·복무", false)
     )

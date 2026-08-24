@@ -479,6 +479,11 @@ private fun HitCard(hit: RegHit, best: Boolean = false) {
 private fun bookBadgeColors(book: String): Pair<Color, Color> = when (book) {
     "전동차승무원업무예규" -> Color(0xFFE9F1FD) to Color(0xFF1E3A8A)
     "운전취급규정" -> Color(0xFFE9F6ED) to Color(0xFF2E7D32)
+    "운전관계직원업무내규" -> Color(0xFFEDE9FB) to Color(0xFF5E35B1)
+    "운전취급세부요령" -> Color(0xFFE0F2F1) to Color(0xFF00695C)
+    "차량기지운전취급내규" -> Color(0xFFFFF3E0) to Color(0xFFB26A00)
+    "승무원지도운용내규" -> Color(0xFFFCE4EC) to Color(0xFFAD1457)
+    "운전무사고성적심사규정" -> Color(0xFFF1F8E9) to Color(0xFF558B2F)
     "인사규정" -> Color(0xFFFDF0E3) to Color(0xFFC2660A)
     "취업규칙" -> Color(0xFFFBF4DC) to Color(0xFF8A6D00)
     else -> Color(0xFFEEEEEE) to Color(0xFF555555)
