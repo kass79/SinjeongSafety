@@ -1,6 +1,7 @@
 package com.sinjeong.safety.ui.screens
 
 import android.app.Activity
+import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -628,6 +629,26 @@ private fun VideoPlayer(video: Attachment) {
         c as? Activity
     }
 
+    // ── 이어보기: 재생 위치를 기기에 저장한다(DB·새 라이브러리 없이 SharedPreferences 로 충분) ──
+    // URL 은 업로드 시각+파일명이라 유일하지만 특수문자가 많아 키로 쓸 수 없다 → 해시를 키로.
+    val prefs = remember(context) { context.getSharedPreferences("safety_prefs", Context.MODE_PRIVATE) }
+    val posKey = remember(video.url) { "video_pos_" + video.url.hashCode() }
+    // 막 시작한 영상은 이어볼 필요가 없다 — 30초 미만 지점은 저장도 복원도 하지 않는다.
+    val minResumeMs = 30_000
+    // 끝까지 본 뒤 화면을 나가면 currentPosition 이 '끝'이라 지운 걸 다시 쓰게 된다. 그래서 기억해 둔다.
+    val finished = remember { mutableStateOf(false) }
+    fun savePos(v: VideoView?) {
+        val ms = v?.currentPosition ?: 0
+        if (!finished.value && ms >= minResumeMs) prefs.edit().putInt(posKey, ms).apply()
+    }
+    fun onFinished() {
+        // 안 지우면 다음에 항상 끝부분에서 시작해 아무것도 안 보인다.
+        finished.value = true
+        prefs.edit().remove(posKey).apply()
+    }
+    // 이 화면을 벗어날 때(다른 화면 이동·앱 종료) 마지막 위치를 남긴다.
+    DisposableEffect(Unit) { onDispose { savePos(inlineView) } }
+
     Box(
         Modifier
             .fillMaxWidth()
@@ -641,7 +662,13 @@ private fun VideoPlayer(video: Attachment) {
                     VideoView(ctx).apply {
                         setVideoURI(Uri.parse(video.url))
                         setMediaController(MediaController(ctx).also { it.setAnchorView(this) })
-                        setOnPreparedListener { it.start() }
+                        setOnPreparedListener {
+                            // 저장된 지점이 있으면 거기서부터, 없으면 처음부터.
+                            val saved = prefs.getInt(posKey, 0)
+                            if (saved >= minResumeMs) seekTo(saved)
+                            it.start()
+                        }
+                        setOnCompletionListener { onFinished() }
                         inlineView = this
                     }
                 },
@@ -701,6 +728,8 @@ private fun VideoPlayer(video: Attachment) {
                     // 이미 정리된 뒤라 0 이 나올 수 있는데, 그때 seek 하면 처음으로 튀므로 거른다.
                     val pos = fsView?.currentPosition ?: 0
                     if (pos > 0) inlineView?.seekTo(pos)
+                    // 세로 재생기뿐 아니라 기기에도 남긴다 — 화면을 아예 나가도 이어보게.
+                    savePos(fsView)
                     inlineView?.start()
                 }
             }
@@ -715,6 +744,7 @@ private fun VideoPlayer(video: Attachment) {
                                 if (startAt > 0) seekTo(startAt)
                                 mp.start()
                             }
+                            setOnCompletionListener { onFinished() }
                             fsView = this
                         }
                     },
