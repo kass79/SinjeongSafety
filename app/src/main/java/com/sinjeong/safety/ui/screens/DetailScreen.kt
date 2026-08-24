@@ -733,15 +733,24 @@ private fun VideoPlayer(video: Attachment) {
         ) {
             var fsView by remember { mutableStateOf<VideoView?>(null) }
             DisposableEffect(Unit) {
+                // 다이얼로그가 살아 있는 동안 세로 재생기는 반드시 멈춘 상태여야 한다.
+                // 전체화면 버튼 onClick 에서도 pause 하지만, 회전으로 이 다이얼로그가
+                // 다시 만들어질 땐 그 onClick 을 아무도 다시 부르지 않는다 → 여기서 한 겹 더.
+                inlineView?.pause()
                 onDispose {
-                    // 전체화면에서 보던 지점을 세로 재생기로 되돌려 준다.
-                    // 회전으로 재생성될 때도 여기를 지나므로, 새 다이얼로그가 이어서 시작한다.
-                    // 이미 정리된 뒤라 0 이 나올 수 있는데, 그때 seek 하면 처음으로 튀므로 거른다.
+                    // 위치 저장은 회전 재생성 때도 해야 한다 — 새 다이얼로그가 여기서 이어 시작한다.
+                    // (startAt 은 바깥 state 라 새 다이얼로그의 onPrepared 가 이 값을 읽는다.
+                    //  onPrepared 는 비동기라 항상 이 dispose 뒤에 돈다.)
                     val pos = fsView?.currentPosition ?: 0
-                    if (pos > 0) inlineView?.seekTo(pos)
-                    // 세로 재생기뿐 아니라 기기에도 남긴다 — 화면을 아예 나가도 이어보게.
+                    if (pos > 0) startAt = pos
+                    // 기기에도 남긴다 — 화면을 아예 나가도 이어보게.
                     savePos(fsView)
-                    inlineView?.start()
+                    // 세로 재생기 재개는 '진짜로 닫힐 때'만. 회전 재생성 중엔 fullscreen 이
+                    // 여전히 true 라 여기 안 들어온다 — 안 거르면 전체화면+세로가 동시에 울린다.
+                    if (!fullscreen) {
+                        if (pos > 0) inlineView?.seekTo(pos)
+                        inlineView?.start()
+                    }
                 }
             }
             Box(Modifier.fillMaxSize().background(Color.Black)) {

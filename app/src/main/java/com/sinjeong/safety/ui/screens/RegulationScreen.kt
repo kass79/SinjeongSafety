@@ -393,17 +393,19 @@ private fun BookCard(book: RegBook, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(14.dp), color = Color.White,
         shadowElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp).clickable(onClick = onClick)
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 3.dp).clickable(onClick = onClick)
     ) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(Color(book.bgColor)),
+                Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(Color(book.bgColor)),
                 contentAlignment = Alignment.Center
-            ) { Text(book.icon, fontSize = 18.sp) }
-            Spacer(Modifier.width(12.dp))
+            ) { Text(book.icon, fontSize = 17.sp) }
+            Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
-                Text(book.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppColors.TextPrimary)
-                Text("${book.articles.size}개 조문 · ${book.subtitle}", fontSize = 11.sp, color = AppColors.TextSecondary)
+                Text(book.name, fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = AppColors.TextPrimary,
+                    lineHeight = 18.sp)
+                Text("${book.articles.size}개 조문 · ${book.subtitle}", fontSize = 10.5.sp,
+                    color = AppColors.TextSecondary, lineHeight = 14.sp)
             }
             Text("›", fontSize = 16.sp, color = AppColors.TextHint)
         }
@@ -420,7 +422,7 @@ private fun BookArticleList(book: RegBook, onArticle: (RegArticle, String) -> Un
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 20.dp)) {
         item {
             Row(
-                Modifier.fillMaxWidth().padding(18.dp)
+                Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp)
                     .background(Color.White, RoundedCornerShape(15.dp))
                     .padding(horizontal = 15.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -465,19 +467,19 @@ private fun BookArticleList(book: RegBook, onArticle: (RegArticle, String) -> Un
 private fun ArticleRow(prefix: String, title: String, body: String, query: String, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(14.dp), color = Color.White, shadowElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp).clickable(onClick = onClick)
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 2.5.dp).clickable(onClick = onClick)
     ) {
-        Column(Modifier.padding(15.dp)) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             Surface(color = Color(0xFFEEF2FB), shape = RoundedCornerShape(6.dp)) {
-                Text(prefix, color = AppColors.Primary, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                Text(prefix, color = AppColors.Primary, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp))
             }
-            Spacer(Modifier.height(7.dp))
-            Text(highlight(title, query), fontSize = 15.sp, fontWeight = FontWeight.Bold,
-                color = AppColors.TextPrimary)
-            Spacer(Modifier.height(4.dp))
-            Text(highlight(snippet(body, query), query), fontSize = 12.5.sp, color = AppColors.TextSecondary,
-                maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 18.sp)
+            Spacer(Modifier.height(5.dp))
+            Text(highlight(title, query), fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                color = AppColors.TextPrimary, lineHeight = 19.sp)
+            Spacer(Modifier.height(3.dp))
+            Text(highlight(snippet(body, query), query), fontSize = 11.5.sp, color = AppColors.TextSecondary,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 16.sp)
         }
     }
 }
@@ -530,9 +532,9 @@ private fun ArticleDetail(
     onToggleFavorite: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
         Surface(shape = RoundedCornerShape(18.dp), color = Color.White, shadowElevation = 1.dp) {
-            Column(Modifier.padding(22.dp)) {
+            Column(Modifier.padding(16.dp)) {
                 if (funText != null) {
                     Box(
                         Modifier.fillMaxWidth()
@@ -543,26 +545,28 @@ private fun ArticleDetail(
                         Column {
                             Pill("✨ 쉽게 풀면", Color(0xFF5B4BC4))
                             Spacer(Modifier.height(8.dp))
-                            Text(funText, fontSize = 13.5.sp, color = Color(0xFF4A4470), lineHeight = 23.sp)
+                            Text(funText, fontSize = 13.sp, color = Color(0xFF4A4470), lineHeight = 20.sp)
                         }
                     }
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(12.dp))
                 }
                 Surface(color = Color(0xFFEEF2FB), shape = RoundedCornerShape(7.dp)) {
-                    Text(article.num, color = AppColors.Primary, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                    Text(article.num, color = AppColors.Primary, fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp))
+                }
+                Spacer(Modifier.height(9.dp))
+                Text(highlight(article.title, query), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold,
+                    color = AppColors.TextPrimary, lineHeight = 25.sp)
+                Spacer(Modifier.height(10.dp))
+                SelectionContainer {
+                    // 터널에서 급히 읽는 화면이라 본문은 14sp 밑으로 내리지 않는다.
+                    // 줄간은 1.5배(21sp)로 유지해 밀도를 높이면서 가독성은 지킨다.
+                    Text(highlight(article.body, query), fontSize = 14.sp,
+                        color = AppColors.TextPrimary, lineHeight = 21.sp)
                 }
                 Spacer(Modifier.height(12.dp))
-                Text(highlight(article.title, query), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold,
-                    color = AppColors.TextPrimary, lineHeight = 28.sp)
-                Spacer(Modifier.height(14.dp))
-                SelectionContainer {
-                    Text(highlight(article.body, query), fontSize = 15.sp,
-                        color = AppColors.TextPrimary, lineHeight = 26.sp)
-                }
-                Spacer(Modifier.height(16.dp))
                 HorizontalDivider(color = AppColors.Divider)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -595,7 +599,7 @@ private fun ArticleDetail(
                 }
             }
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
     }
 }
 

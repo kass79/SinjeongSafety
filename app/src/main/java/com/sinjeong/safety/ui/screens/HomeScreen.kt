@@ -325,7 +325,7 @@ private fun HeaderBar(
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Image(
@@ -333,7 +333,7 @@ private fun HeaderBar(
             contentDescription = "마스코트",
             contentScale = ContentScale.Crop,
             modifier = Modifier
-                .size(if (narrow) 38.dp else 44.dp)
+                .size(if (narrow) 36.dp else 40.dp)
                 .clip(RoundedCornerShape(15.dp))
                 .background(Color(0xFFE8F0FC))
                 .border(2.dp, Color.White, RoundedCornerShape(15.dp))
@@ -345,7 +345,7 @@ private fun HeaderBar(
             // 17sp 로 낮추니 사업소명이 온전히 보이면서 칩·아이콘과 무게가 맞는다.
             Text(
                 "신정승무사업소",
-                fontSize = if (narrow) hsp(15.5) else hsp(17.0),
+                fontSize = if (narrow) hsp(15.0) else hsp(16.0),
                 fontWeight = FontWeight.ExtraBold,
                 color = AppColors.Primary,
                 maxLines = 1,
@@ -354,7 +354,7 @@ private fun HeaderBar(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
-                        .size(8.dp)
+                        .size(7.dp)
                         .clip(CircleShape)
                         .background(AppColors.OnlineGreen)
                 )
@@ -365,7 +365,7 @@ private fun HeaderBar(
                     } else {
                         if (isAdmin) "관리자님 (관리자 모드)" else "실시간 안전정보 공유중"
                     },
-                    fontSize = if (narrow) hsp(10.5) else hsp(11.5),
+                    fontSize = if (narrow) hsp(10.0) else hsp(11.0),
                     color = AppColors.TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -416,11 +416,11 @@ private fun HeaderBar(
                 Text(
                     // 기온을 못 받았으면 이모지만
                     (weather?.emoji ?: "⛅") + (weather?.tempC?.let { " $it°" } ?: ""),
-                    fontSize = if (narrow) hsp(11.5) else hsp(12.5),
+                    fontSize = if (narrow) hsp(11.0) else hsp(12.0),
                     maxLines = 1,
                     modifier = Modifier.padding(
-                        horizontal = if (narrow) 7.dp else 9.dp,
-                        vertical = if (narrow) 4.dp else 5.dp
+                        horizontal = if (narrow) 6.dp else 8.dp,
+                        vertical = if (narrow) 3.dp else 4.dp
                     )
                 )
             }
@@ -460,14 +460,14 @@ private fun HeaderBar(
             shape = CircleShape,
             color = Color.White,
             border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
-            modifier = Modifier.size(if (narrow) 36.dp else 42.dp).clickable(onClick = onSettingsClick)
+            modifier = Modifier.size(if (narrow) 34.dp else 38.dp).clickable(onClick = onSettingsClick)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     Icons.Outlined.Settings,
                     contentDescription = "설정",
                     tint = AppColors.Primary,
-                    modifier = Modifier.size(if (narrow) 20.dp else 24.dp)
+                    modifier = Modifier.size(if (narrow) 18.dp else 21.dp)
                 )
             }
         }
@@ -478,14 +478,14 @@ private fun HeaderBar(
             shape = CircleShape,
             color = if (isAdmin) AppColors.Primary else Color.White,
             border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
-            modifier = Modifier.size(if (narrow) 36.dp else 42.dp).clickable(onClick = onShieldClick)
+            modifier = Modifier.size(if (narrow) 34.dp else 38.dp).clickable(onClick = onShieldClick)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     if (isAdmin) Icons.Outlined.Logout else Icons.Outlined.AdminPanelSettings,
                     contentDescription = "관리자",
                     tint = if (isAdmin) Color.White else AppColors.Primary,
-                    modifier = Modifier.size(if (narrow) 20.dp else 24.dp)
+                    modifier = Modifier.size(if (narrow) 18.dp else 21.dp)
                 )
             }
         }
