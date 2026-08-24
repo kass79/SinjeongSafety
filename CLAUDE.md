@@ -40,7 +40,9 @@ anthropic-skills:sinjeong-safety-app 스킬에는 "사용자가 GitHub 웹에서
 
 - 화면: HomeScreen(피드+카테고리+규정검색 배너) / DetailScreen / WriteScreen / LoginScreen /
   RegulationScreen(규정 뷰어 3단, 자체 state + BackHandler) / **RegulationAskScreen(규정 검색, v1.0.3)**
-- 규정 데이터: `assets/regulations.json` 626조문 (키 n/t/b). 오프라인 동작이 설계 원칙(터널 대비).
+- 규정 데이터: `assets/regulations.json` **9권 912조문** (키 n/t/b, 책이름→조문배열). 오프라인 동작이
+  설계 원칙(터널 대비). 새 책을 추가하면 `RegulationRepository.bookMeta`·`RegulationSearch` 가중치/단축명·
+  `RegulationAskScreen.bookBadgeColors` 세 곳에 같이 등록해야 화면에 나온다.
 - 검색 엔진: `data/RegulationSearch.kt` — 동의어 24그룹·불용어·idf·점수식, **30점 미만이면
   "못 찾았어요" 안전장치**. 2단계(AI 답변) 확장 시 이 파일을 RAG 재료로 재사용하는 설계.
 - ~~단방향 게시판이 확정 설계~~ → **2026-08-22 사용자가 뒤집었습니다. 게시물 댓글 있음**
