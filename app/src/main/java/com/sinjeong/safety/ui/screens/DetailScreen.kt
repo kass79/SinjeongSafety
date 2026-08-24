@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import android.widget.MediaController
@@ -713,18 +714,28 @@ private fun VideoPlayer(video: Attachment) {
     // ── 전체화면 보기 ──
     // 가로로 눕혀 크게 보는 게 목적이라 다이얼로그를 열면서 화면을 가로로 돌린다.
     if (fullscreen) {
+        // 화면 방향은 '전체화면 상태'에 묶는다. 다이얼로그 컴포지션에 묶으면(예전 코드)
+        // 아래 key() 재생성 때 onDispose 가 방향을 되돌려 가로↔세로가 무한히 튕긴다 — 실측.
+        // fullscreen 이 true 인 동안만 가로, 어떤 경로로 닫혀도 onDispose 가 반드시 복원한다.
+        DisposableEffect(Unit) {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            onDispose {
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+        }
+        // 회전이 configChanges 로 처리되면서(액티비티 재시작 없음) 다이얼로그 창이
+        // 회전 전 크기로 남아 화면 가운데 기둥처럼 뜨는 것을 폴드 폭에서 실측했다.
+        // 방향이 바뀌면 다이얼로그만 새로 만들어 새 창 크기로 다시 잡게 한다.
+        androidx.compose.runtime.key(LocalConfiguration.current.orientation) {
         Dialog(
             onDismissRequest = { fullscreen = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             var fsView by remember { mutableStateOf<VideoView?>(null) }
             DisposableEffect(Unit) {
-                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 onDispose {
-                    // 여기서 복원을 빠뜨리면 다이얼로그를 닫아도 앱이 계속 가로로 고정된다.
-                    // 뒤로가기로 닫히든 버튼으로 닫히든 onDispose 는 반드시 지나간다.
-                    activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                     // 전체화면에서 보던 지점을 세로 재생기로 되돌려 준다.
+                    // 회전으로 재생성될 때도 여기를 지나므로, 새 다이얼로그가 이어서 시작한다.
                     // 이미 정리된 뒤라 0 이 나올 수 있는데, 그때 seek 하면 처음으로 튀므로 거른다.
                     val pos = fsView?.currentPosition ?: 0
                     if (pos > 0) inlineView?.seekTo(pos)
@@ -765,6 +776,7 @@ private fun VideoPlayer(video: Attachment) {
             }
         }
     }
+        } // key(orientation)
 }
 
 // ── 링크 미리보기 카드 (유튜브면 썸네일) ───────────────────────

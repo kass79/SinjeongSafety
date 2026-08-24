@@ -26,9 +26,16 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SinjeongSafety">
 
+        <!--
+          configChanges: 동영상 전체화면이 화면을 가로로 돌리는데, 이 선언이 없으면
+          회전이 액티비티를 재시작시켜 다이얼로그·재생 상태가 그 자리에서 깨진다
+          (폴드 접은 화면에서 전체화면 오류로 실측). Compose는 재시작 없이도
+          Configuration 변화를 스스로 반영하므로 잃는 것이 없다.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.SinjeongSafety">
             <intent-filter>
