@@ -306,10 +306,20 @@ private fun HeaderBar(
     onShieldClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
+    // 헤더 글자는 시스템 '글꼴 크게' 설정을 따라가지 않는다.
+    // 폴드 접은 화면 + 글꼴 크게(1.3배)에서 제목·부제가 잘리고 방패 아이콘이 화면 밖으로
+    // 밀려나는 것을 실측으로 확인했다. 본문 글자는 접근성대로 커지게 두되,
+    // 한 줄에 고정폭 요소가 몰린 헤더만은 시각 크기를 고정해 레이아웃을 지킨다.
+    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+    fun hsp(v: Double) = (v / fontScale).sp
+
     // 폴드7 접은 화면(약 344dp)에서는 오른쪽 아이콘들이 폭을 먹어 제목에 남는 자리가 거의 없다.
-    // 좁으면 글자·간격을 한 단계씩 줄인다. 캘린더 아이콘을 빼(배너 클릭으로 옮김) 42dp가 돌아온 만큼
-    // 제목은 15sp까지 쥐어짜지 않고 16.5sp로 되돌렸다.
-    val narrow = LocalConfiguration.current.screenWidthDp < 380
+    // 좁으면 글자·아이콘·간격을 한 단계씩 줄인다.
+    // 판정은 LocalConfiguration.screenWidthDp 가 아니라 '실제 그려지는 폭'으로 한다 —
+    // 폴드·화면분할·창 모드에서 Configuration 값이 실폭과 어긋나 방패 아이콘이
+    // 화면 밖으로 밀려난 것을 실측으로 확인했다.
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val narrow = maxWidth < 380.dp
     val iconGap = if (narrow) 5.dp else 8.dp
 
     Row(
@@ -335,7 +345,7 @@ private fun HeaderBar(
             // 17sp 로 낮추니 사업소명이 온전히 보이면서 칩·아이콘과 무게가 맞는다.
             Text(
                 "신정승무사업소",
-                fontSize = if (narrow) 15.5.sp else 17.sp,
+                fontSize = if (narrow) hsp(15.5) else hsp(17.0),
                 fontWeight = FontWeight.ExtraBold,
                 color = AppColors.Primary,
                 maxLines = 1,
@@ -355,7 +365,7 @@ private fun HeaderBar(
                     } else {
                         if (isAdmin) "관리자님 (관리자 모드)" else "실시간 안전정보 공유중"
                     },
-                    fontSize = if (narrow) 11.sp else 11.5.sp,
+                    fontSize = if (narrow) hsp(10.5) else hsp(11.5),
                     color = AppColors.TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -382,7 +392,7 @@ private fun HeaderBar(
                     else warning
                 Text(
                     badgeText,
-                    fontSize = 9.sp,
+                    fontSize = hsp(9.0),
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF8A3D00),
                     maxLines = 1,
@@ -406,9 +416,12 @@ private fun HeaderBar(
                 Text(
                     // 기온을 못 받았으면 이모지만
                     (weather?.emoji ?: "⛅") + (weather?.tempC?.let { " $it°" } ?: ""),
-                    fontSize = 13.sp,
+                    fontSize = if (narrow) hsp(11.5) else hsp(12.5),
                     maxLines = 1,
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp)
+                    modifier = Modifier.padding(
+                        horizontal = if (narrow) 7.dp else 9.dp,
+                        vertical = if (narrow) 4.dp else 5.dp
+                    )
                 )
             }
         }
@@ -447,14 +460,14 @@ private fun HeaderBar(
             shape = CircleShape,
             color = Color.White,
             border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
-            modifier = Modifier.size(42.dp).clickable(onClick = onSettingsClick)
+            modifier = Modifier.size(if (narrow) 36.dp else 42.dp).clickable(onClick = onSettingsClick)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     Icons.Outlined.Settings,
                     contentDescription = "설정",
                     tint = AppColors.Primary,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(if (narrow) 20.dp else 24.dp)
                 )
             }
         }
@@ -465,18 +478,19 @@ private fun HeaderBar(
             shape = CircleShape,
             color = if (isAdmin) AppColors.Primary else Color.White,
             border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
-            modifier = Modifier.size(42.dp).clickable(onClick = onShieldClick)
+            modifier = Modifier.size(if (narrow) 36.dp else 42.dp).clickable(onClick = onShieldClick)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     if (isAdmin) Icons.Outlined.Logout else Icons.Outlined.AdminPanelSettings,
                     contentDescription = "관리자",
                     tint = if (isAdmin) Color.White else AppColors.Primary,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(if (narrow) 20.dp else 24.dp)
                 )
             }
         }
     }
+    } // BoxWithConstraints
 }
 
 // ── 마스코트 배너: 컴팩트 와이드 (이미지 전체가 캘린더 앱 바로가기) ────
