@@ -1,6 +1,9 @@
 package com.sinjeong.safety.ui.screens
 
+import android.app.Activity
+import android.content.ContextWrapper
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,6 +16,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
@@ -42,6 +47,8 @@ import androidx.compose.ui.text.font.FontWeight as FW
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.sinjeong.safety.MainViewModel
 import com.sinjeong.safety.data.Attachment
@@ -608,6 +615,19 @@ private fun AttachmentFileRow(doc: Attachment) {
 @Composable
 private fun VideoPlayer(video: Attachment) {
     var playing by remember { mutableStateOf(false) }
+    var fullscreen by remember { mutableStateOf(false) }
+    // 전체화면으로 넘어갈 때 "보던 지점"을 이어받으려면 세로 재생기 핸들이 필요하다.
+    var inlineView by remember { mutableStateOf<VideoView?>(null) }
+    var startAt by remember { mutableStateOf(0) }
+    // 화면 방향을 돌리려면 Activity 가 있어야 한다. Compose 의 Context 는 래핑돼 있을 수
+    // 있어 벗겨서 찾고, 못 찾으면(Activity 가 아니면) null 로 두고 조용히 세로로 간다.
+    val context = LocalContext.current
+    val activity = remember(context) {
+        var c: android.content.Context? = context
+        while (c is ContextWrapper && c !is Activity) c = c.baseContext
+        c as? Activity
+    }
+
     Box(
         Modifier
             .fillMaxWidth()
@@ -622,10 +642,28 @@ private fun VideoPlayer(video: Attachment) {
                         setVideoURI(Uri.parse(video.url))
                         setMediaController(MediaController(ctx).also { it.setAnchorView(this) })
                         setOnPreparedListener { it.start() }
+                        inlineView = this
                     }
                 },
                 modifier = Modifier.fillMaxSize()
             )
+            // MediaController 에는 재생/일시정지/탐색바만 있고 전체화면 버튼이 없어서 직접 얹는다.
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable {
+                        // 두 재생기가 동시에 소리를 내지 않게 세로 쪽은 멈춰 두고 위치만 넘긴다.
+                        inlineView?.let { startAt = it.currentPosition; it.pause() }
+                        fullscreen = true
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Fullscreen, "전체화면", tint = Color.White, modifier = Modifier.size(22.dp))
+            }
         } else {
             // 재생 전: 어두운 배경 + 재생 버튼 + 파일명
             Box(Modifier.fillMaxSize().clickable { playing = true }, contentAlignment = Alignment.Center) {
@@ -641,6 +679,59 @@ private fun VideoPlayer(video: Attachment) {
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.align(Alignment.BottomStart).padding(10.dp)
                 )
+            }
+        }
+    }
+
+    // ── 전체화면 보기 ──
+    // 가로로 눕혀 크게 보는 게 목적이라 다이얼로그를 열면서 화면을 가로로 돌린다.
+    if (fullscreen) {
+        Dialog(
+            onDismissRequest = { fullscreen = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            var fsView by remember { mutableStateOf<VideoView?>(null) }
+            DisposableEffect(Unit) {
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                onDispose {
+                    // 여기서 복원을 빠뜨리면 다이얼로그를 닫아도 앱이 계속 가로로 고정된다.
+                    // 뒤로가기로 닫히든 버튼으로 닫히든 onDispose 는 반드시 지나간다.
+                    activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                    // 전체화면에서 보던 지점을 세로 재생기로 되돌려 준다.
+                    // 이미 정리된 뒤라 0 이 나올 수 있는데, 그때 seek 하면 처음으로 튀므로 거른다.
+                    val pos = fsView?.currentPosition ?: 0
+                    if (pos > 0) inlineView?.seekTo(pos)
+                    inlineView?.start()
+                }
+            }
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                AndroidView(
+                    factory = { ctx ->
+                        VideoView(ctx).apply {
+                            setVideoURI(Uri.parse(video.url))
+                            // 전체화면 안에서도 되감기/빨리감기는 필요하다.
+                            setMediaController(MediaController(ctx).also { it.setAnchorView(this) })
+                            setOnPreparedListener { mp ->
+                                if (startAt > 0) seekTo(startAt)
+                                mp.start()
+                            }
+                            fsView = this
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .clickable { fullscreen = false },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.FullscreenExit, "축소", tint = Color.White, modifier = Modifier.size(22.dp))
+                }
             }
         }
     }
