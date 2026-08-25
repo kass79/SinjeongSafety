@@ -26,4 +26,29 @@ class AiRepository {
         return (result.data as? Map<String, Any?>)?.get("summary") as? String
             ?: throw IllegalStateException("응답이 비었습니다")
     }
+
+    /**
+     * 사고사례 퀴즈 초안(보통 2문제). 결과는 바로 저장하지 않고 관리자가 검토한다.
+     * 정답 번호는 서버가 Double 로 줄 수도 있어 Number 로 받고,
+     * 보기 개수를 벗어난 값이 와도 화면이 깨지지 않도록 범위 안으로 조인다.
+     */
+    suspend fun generateQuiz(title: String, content: String): List<QuizQuestion> {
+        val data = hashMapOf("title" to title, "content" to content)
+        val result = fn.getHttpsCallable("generateQuiz").call(data).await()
+        @Suppress("UNCHECKED_CAST")
+        val raw = (result.data as? Map<String, Any?>)?.get("questions") as? List<Map<String, Any?>>
+        val quiz = raw.orEmpty().mapNotNull { item ->
+            val text = item["q"] as? String
+            val choices = (item["choices"] as? List<*>)?.mapNotNull { it as? String }.orEmpty()
+            if (text.isNullOrBlank() || choices.size < 2) return@mapNotNull null
+            QuizQuestion(
+                q = text,
+                choices = choices,
+                answer = ((item["answer"] as? Number)?.toInt() ?: 0).coerceIn(0, choices.size - 1),
+                explain = item["explain"] as? String ?: ""
+            )
+        }
+        if (quiz.isEmpty()) throw IllegalStateException("응답이 비었습니다")
+        return quiz
+    }
 }

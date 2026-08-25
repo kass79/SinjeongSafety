@@ -12,6 +12,7 @@ import com.sinjeong.safety.data.ConfirmReport
 import com.sinjeong.safety.data.CrewConfirm
 import com.sinjeong.safety.data.LinkAttachment
 import com.sinjeong.safety.data.Post
+import com.sinjeong.safety.data.QuizQuestion
 import com.sinjeong.safety.data.effectiveDate
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.messaging.FirebaseMessaging
@@ -285,14 +286,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun isConfirmed(postId: String): Boolean = postId in _confirmedIds.value
 
-    fun confirmRead(postId: String) {
+    /** 퀴즈를 푼 경우에만 성적이 들어온다. 기본값이라 퀴즈 없는 글의 호출부는 그대로다. */
+    fun confirmRead(postId: String, quizCorrect: Int? = null, quizTotal: Int? = null) {
         if (postId in _confirmedIds.value) return
         val updated = _confirmedIds.value + postId
         _confirmedIds.value = updated
         prefs.edit().putStringSet("confirmed_ids", updated).apply()
         val empNo = _crewEmpNo.value
         val name = _crewName.value
-        viewModelScope.launch { runCatching { repo.confirmRead(postId, empNo, name) } }
+        viewModelScope.launch {
+            runCatching { repo.confirmRead(postId, empNo, name, quizCorrect, quizTotal) }
+        }
     }
 
     /**
@@ -733,6 +737,37 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _message.value = UiMessage("AI 요약 실패: ${e.localizedMessage}", true)
             } finally {
                 _aiLoading.value = false
+            }
+        }
+    }
+
+    // ── 사고사례 퀴즈 (관리자만) ────────────────────────────────
+    /** 퀴즈 초안 생성. 저장하지 않고 화면이 관리자에게 먼저 보여 준다(3줄 요약과 같은 방식). */
+    fun generateQuizDraft(title: String, content: String, onResult: (List<QuizQuestion>) -> Unit) {
+        if (!_isAdmin.value) return
+        viewModelScope.launch {
+            _aiLoading.value = true
+            try {
+                onResult(aiRepo.generateQuiz(title, content))
+            } catch (e: Exception) {
+                _message.value = UiMessage("퀴즈 생성 실패: ${e.localizedMessage}", true)
+            } finally {
+                _aiLoading.value = false
+            }
+        }
+    }
+
+    /** 검토를 마친 퀴즈를 글에 붙인다. 빈 리스트면 퀴즈를 없앤다. */
+    fun saveQuiz(postId: String, quiz: List<QuizQuestion>, onSuccess: () -> Unit) {
+        if (!_isAdmin.value) return
+        viewModelScope.launch {
+            try {
+                repo.saveQuiz(postId, quiz)
+                _message.value =
+                    UiMessage(if (quiz.isEmpty()) "퀴즈를 삭제했습니다" else "퀴즈를 저장했습니다")
+                onSuccess()
+            } catch (e: Exception) {
+                _message.value = UiMessage("퀴즈 저장 실패: ${e.localizedMessage}", true)
             }
         }
     }

@@ -407,7 +407,7 @@ private fun HeaderBar(
             }
             Surface(
                 shape = RoundedCornerShape(50),
-                color = Color.White,
+                color = AppColors.Surface,
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     if (warnActive) Color(0xFFFF8A3D) else AppColors.Divider
@@ -458,7 +458,7 @@ private fun HeaderBar(
         // 설정 아이콘 → 설정 화면
         Surface(
             shape = CircleShape,
-            color = Color.White,
+            color = AppColors.Surface,
             border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
             modifier = Modifier.size(if (narrow) 34.dp else 38.dp).clickable(onClick = onSettingsClick)
         ) {
@@ -476,7 +476,7 @@ private fun HeaderBar(
         // 방패 아이콘 → 관리자 로그인 / 로그아웃
         Surface(
             shape = CircleShape,
-            color = if (isAdmin) AppColors.Primary else Color.White,
+            color = if (isAdmin) AppColors.Primary else AppColors.Surface,
             border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
             modifier = Modifier.size(if (narrow) 34.dp else 38.dp).clickable(onClick = onShieldClick)
         ) {
@@ -542,7 +542,7 @@ private fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
 
     Surface(
         shape = RoundedCornerShape(50),
-        color = Color.White,
+        color = AppColors.Surface,
         border = androidx.compose.foundation.BorderStroke(
             1.dp, if (focused) AppColors.Primary else AppColors.Divider
         ),
@@ -615,7 +615,7 @@ private fun CategoryRow(
         val allSelected = selected == null
         Surface(
             shape = RoundedCornerShape(17.dp),
-            color = if (allSelected) AppColors.Primary else Color.White,
+            color = if (allSelected) AppColors.Primary else AppColors.Surface,
             border = androidx.compose.foundation.BorderStroke(
                 1.dp, if (allSelected) AppColors.Primary else AppColors.Divider
             ),
@@ -641,7 +641,7 @@ private fun CategoryRow(
             val isSelected = selected == cat.name
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = Color.White,
+                color = AppColors.Surface,
                 border = androidx.compose.foundation.BorderStroke(
                     if (isSelected) 2.dp else 1.dp,
                     if (isSelected) cat.color else AppColors.Divider
@@ -686,7 +686,7 @@ private fun CategoryRow(
 fun PostCard(post: Post, isNew: Boolean, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = if (post.pinned) Color(0xFFFFFBF4) else Color.White,
+        color = if (post.pinned) Color(0xFFFFFBF4) else AppColors.Surface,
         border = androidx.compose.foundation.BorderStroke(
             if (post.pinned) 1.5.dp else 1.dp,
             if (post.pinned) Color(0xFFFFD9A6) else AppColors.Divider
@@ -831,7 +831,7 @@ private fun FeedbackCard() {
     val context = LocalContext.current
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = Color.White,
+        color = AppColors.Surface,
         shadowElevation = 1.dp,
         modifier = Modifier
             .fillMaxWidth()
@@ -1209,7 +1209,7 @@ private fun FavoriteFilterChip(on: Boolean, count: Int, onToggle: () -> Unit) {
     ) {
         Surface(
             shape = RoundedCornerShape(18.dp),
-            color = if (on) Color(0xFFF5B301) else Color.White,
+            color = if (on) Color(0xFFF5B301) else AppColors.Surface,
             border = androidx.compose.foundation.BorderStroke(
                 1.dp, if (on) Color(0xFFF5B301) else AppColors.Divider
             ),

@@ -220,8 +220,8 @@ fun QuestionDetailScreen(
                         maxLines = 4,
                         shape = RoundedCornerShape(20.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White,
+                            focusedContainerColor = AppColors.Surface,
+                            unfocusedContainerColor = AppColors.Surface,
                             focusedBorderColor = AppColors.Primary,
                             unfocusedBorderColor = AppColors.Divider
                         ),

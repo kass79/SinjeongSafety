@@ -40,18 +40,24 @@ fun shareConfirmCsv(context: Context, title: String, report: ConfirmReport) {
     val result = runCatching {
         val sb = StringBuilder()
         sb.append(0xFEFF.toChar())  // 엑셀용 UTF-8 표식(BOM). 눈에 안 보이는 글자라 코드값으로 적는다.
-        sb.append("사번,이름,확인여부,확인시각\r\n")
+        // 퀴즈 열은 푼 사람만 채운다 — 안 푼 사람은 빈 칸이라야 0점과 구분된다.
+        sb.append("사번,이름,확인여부,확인시각,퀴즈정답,퀴즈문항수\r\n")
         report.confirmed.forEach { crew ->
             sb.append(csvCell(crew.empNo)).append(',')
                 .append(csvCell(crew.name)).append(',')
                 .append(csvCell("확인")).append(',')
-                .append(csvCell(crew.at?.let { csvTimeFormat.format(it.toDate()) } ?: ""))
+                .append(csvCell(crew.at?.let { csvTimeFormat.format(it.toDate()) } ?: "")).append(',')
+                .append(csvCell(crew.quizTotal?.let { (crew.quizCorrect ?: 0).toString() } ?: ""))
+                .append(',')
+                .append(csvCell(crew.quizTotal?.toString() ?: ""))
                 .append("\r\n")
         }
         report.pending.forEach { crew ->
             sb.append(csvCell(crew.empNo)).append(',')
                 .append(csvCell(crew.name)).append(',')
                 .append(csvCell("미확인")).append(',')
+                .append(csvCell("")).append(',')
+                .append(csvCell("")).append(',')
                 .append(csvCell(""))
                 .append("\r\n")
         }
@@ -123,11 +129,16 @@ fun printConfirmRoster(context: Context, title: String, report: ConfirmReport) {
         }
 
         sb.append("<h2>확인한 사람 (").append(done).append("명)</h2>")
-        sb.append("<table><tr><th>사번</th><th>이름</th><th>확인시각</th></tr>")
+        // 퀴즈 열은 푼 사람만 채운다 — 안 푼 사람은 빈 칸이라야 0점과 구분된다.
+        sb.append("<table><tr><th>사번</th><th>이름</th><th>확인시각</th>")
+            .append("<th>퀴즈정답</th><th>퀴즈문항수</th></tr>")
         report.confirmed.forEach { crew ->
             sb.append("<tr><td>").append(htmlEscape(crew.empNo))
                 .append("</td><td>").append(htmlEscape(crew.name))
                 .append("</td><td>").append(crew.at?.let { csvTimeFormat.format(it.toDate()) } ?: "")
+                .append("</td><td>")
+                .append(crew.quizTotal?.let { (crew.quizCorrect ?: 0).toString() } ?: "")
+                .append("</td><td>").append(crew.quizTotal?.toString() ?: "")
                 .append("</td></tr>")
         }
         sb.append("</table>")

@@ -119,7 +119,7 @@ fun RegulationScreen(onBack: () -> Unit, onAsk: () -> Unit = {}) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로", tint = AppColors.TextPrimary)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = AppColors.Surface)
             )
         }
     ) { padding ->
@@ -228,7 +228,7 @@ private fun RegulationHome(
         item {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp)
-                    .background(Color.White, RoundedCornerShape(15.dp))
+                    .background(AppColors.Surface, RoundedCornerShape(15.dp))
                     .padding(horizontal = 15.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -297,7 +297,7 @@ private fun RegulationHome(
                     ) {
                         items(recents) { (name, a) ->
                             Surface(
-                                shape = RoundedCornerShape(99.dp), color = Color.White,
+                                shape = RoundedCornerShape(99.dp), color = AppColors.Surface,
                                 shadowElevation = 1.dp,
                                 modifier = Modifier.clickable { onSavedArticle(name, a) }
                             ) {
@@ -391,7 +391,7 @@ private fun Pill(text: String, color: Color) {
 @Composable
 private fun BookCard(book: RegBook, onClick: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(14.dp), color = Color.White,
+        shape = RoundedCornerShape(14.dp), color = AppColors.Surface,
         shadowElevation = 1.dp,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 3.dp).clickable(onClick = onClick)
     ) {
@@ -423,7 +423,7 @@ private fun BookArticleList(book: RegBook, onArticle: (RegArticle, String) -> Un
         item {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp)
-                    .background(Color.White, RoundedCornerShape(15.dp))
+                    .background(AppColors.Surface, RoundedCornerShape(15.dp))
                     .padding(horizontal = 15.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -466,7 +466,7 @@ private fun BookArticleList(book: RegBook, onArticle: (RegArticle, String) -> Un
 @Composable
 private fun ArticleRow(prefix: String, title: String, body: String, query: String, onClick: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(14.dp), color = Color.White, shadowElevation = 1.dp,
+        shape = RoundedCornerShape(14.dp), color = AppColors.Surface, shadowElevation = 1.dp,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 2.5.dp).clickable(onClick = onClick)
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
@@ -533,7 +533,7 @@ private fun ArticleDetail(
 ) {
     val context = LocalContext.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
-        Surface(shape = RoundedCornerShape(18.dp), color = Color.White, shadowElevation = 1.dp) {
+        Surface(shape = RoundedCornerShape(18.dp), color = AppColors.Surface, shadowElevation = 1.dp) {
             Column(Modifier.padding(16.dp)) {
                 if (funText != null) {
                     Box(
@@ -622,7 +622,7 @@ private fun SectionHeader(title: String, trailing: String?) {
 @Composable
 private fun SavedRow(book: String, article: RegArticle, onClick: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(14.dp), color = Color.White, shadowElevation = 1.dp,
+        shape = RoundedCornerShape(14.dp), color = AppColors.Surface, shadowElevation = 1.dp,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp)
             .clickable(onClick = onClick)
     ) {

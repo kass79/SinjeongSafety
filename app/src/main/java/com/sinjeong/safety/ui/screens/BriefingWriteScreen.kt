@@ -193,7 +193,7 @@ fun BriefingWriteScreen(vm: MainViewModel, onBack: () -> Unit) {
                 Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = AppColors.Surface.copy(alpha = 0.6f),
                         border = BorderStroke(2.dp, Color(0xFFC6CEE8)),
                         modifier = Modifier
                             .weight(1f)
@@ -212,7 +212,7 @@ fun BriefingWriteScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                     Surface(
                         shape = RoundedCornerShape(16.dp),
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = AppColors.Surface.copy(alpha = 0.6f),
                         border = BorderStroke(2.dp, Color(0xFFC6CEE8)),
                         modifier = Modifier
                             .weight(1f)
@@ -398,8 +398,8 @@ private fun PastMonthHeader(ym: String, count: Int) {
 // 질문 작성 화면의 것과 모양은 같지만, 그쪽은 file-private 라 여기서 쓸 수 없다.
 @Composable
 private fun briefingFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedContainerColor = Color.White,
-    unfocusedContainerColor = Color.White,
+    focusedContainerColor = AppColors.Surface,
+    unfocusedContainerColor = AppColors.Surface,
     focusedBorderColor = AppColors.Primary,
     unfocusedBorderColor = AppColors.Divider
 )

@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.Notifications
@@ -249,7 +250,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         if (notifyOn && !systemNotifyOn) {
                             Spacer(Modifier.height(12.dp))
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF4E2)),
+                                colors = CardDefaults.cardColors(containerColor = warnBg),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -258,7 +259,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                                         "휴대폰 설정에서 이 앱의 알림이 꺼져 있어요. " +
                                             "그래서 알림이 오지 않습니다.",
                                         fontSize = 12.5.sp,
-                                        color = Color(0xFF7A4F00),
+                                        color = warnFg,
                                         lineHeight = 18.sp
                                     )
                                     Spacer(Modifier.height(8.dp))
@@ -335,17 +336,88 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         if (locationDenied) {
                             Spacer(Modifier.height(12.dp))
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF4E2)),
+                                colors = CardDefaults.cardColors(containerColor = warnBg),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
                                     "위치 권한이 없어 신정동 기준으로 보여줍니다",
                                     fontSize = 12.5.sp,
-                                    color = Color(0xFF7A4F00),
+                                    color = warnFg,
                                     lineHeight = 18.sp,
                                     modifier = Modifier.padding(12.dp)
                                 )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(22.dp))
+
+                // ── 화면 ─────────────────────────────────────
+                SectionTitle("화면")
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = AppColors.Surface),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Outlined.DarkMode,
+                            contentDescription = null,
+                            tint = AppColors.Primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "다크 모드",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AppColors.TextPrimary
+                            )
+                            Text(
+                                "야간 승무 때 눈부심을 줄입니다",
+                                fontSize = 12.5.sp,
+                                color = AppColors.TextSecondary,
+                                lineHeight = 17.sp
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Row {
+                            listOf("시스템", "라이트", "다크").forEachIndexed { i, label ->
+                                val on = AppColors.mode == i
+                                Surface(
+                                    color = if (on) AppColors.Primary else AppColors.Background,
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .padding(start = if (i == 0) 0.dp else 4.dp)
+                                        .clickable {
+                                            // 테마는 MainViewModel 을 거치지 않고 여기서 바로 저장한다.
+                                            // AppColors 가 State 를 들고 있어 화면 전체가 즉시 다시 그려지고,
+                                            // 테마는 로그인/게시물 상태와 달리 ViewModel 이 관여할 일이 없다.
+                                            AppColors.mode = i
+                                            context.getSharedPreferences(
+                                                "safety_prefs", Context.MODE_PRIVATE
+                                            ).edit().putInt("dark_mode", i).apply()
+                                        }
+                                ) {
+                                    Text(
+                                        label,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        // 다크에서는 Primary 가 밝은 톤이라 흰 글자가 묻힌다
+                                        color = when {
+                                            on && AppColors.isDark -> Color(0xFF10182E)
+                                            on -> Color.White
+                                            else -> AppColors.TextSecondary
+                                        },
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -442,6 +514,10 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
         )
     }
 }
+
+/** 주의 안내 카드 색 (다크에서는 짙은 갈색 배경 + 밝은 노랑 글씨) */
+private val warnBg: Color get() = if (AppColors.isDark) Color(0xFF3A2A12) else Color(0xFFFFF4E2)
+private val warnFg: Color get() = if (AppColors.isDark) Color(0xFFF3C97A) else Color(0xFF7A4F00)
 
 @Composable
 private fun SectionTitle(text: String) {

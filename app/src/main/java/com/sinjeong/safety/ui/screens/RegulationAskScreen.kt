@@ -261,7 +261,7 @@ private fun AskInputBar(
     onSend: () -> Unit,
     enabled: Boolean
 ) {
-    Surface(color = Color.White, shadowElevation = 8.dp) {
+    Surface(color = AppColors.Surface, shadowElevation = 8.dp) {
         Row(
             Modifier.fillMaxWidth().imePadding()
                 .padding(horizontal = 10.dp, vertical = 8.dp),
@@ -280,8 +280,8 @@ private fun AskInputBar(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSend() }),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color(0xFFF7F9FD),
+                    focusedContainerColor = AppColors.Surface,
+                    unfocusedContainerColor = AppColors.Background,
                     focusedBorderColor = AppColors.PrimaryLight,
                     unfocusedBorderColor = AppColors.Divider
                 ),
@@ -321,7 +321,7 @@ private fun MeBubble(text: String) {
 private fun BotBubble(content: @Composable ColumnScope.() -> Unit) {
     Row(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
         Surface(
-            color = Color.White,
+            color = AppColors.Surface,
             shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
             shadowElevation = 1.dp,
@@ -418,7 +418,7 @@ private fun HitCard(hit: RegHit, best: Boolean = false) {
     Surface(
         shape = RoundedCornerShape(14.dp),
         // 1위 조문만 아주 연한 그린으로 띄운다
-        color = if (best) AppColors.TagOpsBg else Color.White,
+        color = if (best) AppColors.TagOpsBg else AppColors.Surface,
         border = androidx.compose.foundation.BorderStroke(
             if (best) 1.5.dp else 1.dp,
             when {
@@ -463,10 +463,10 @@ private fun HitCard(hit: RegHit, best: Boolean = false) {
             if (open) {
                 HorizontalDivider(color = AppColors.Divider, modifier = Modifier.padding(vertical = 4.dp))
                 Text(markUp(hit.article.body, hit.marks), fontSize = 12.5.sp,
-                    color = Color(0xFF333A4C), lineHeight = 22.sp)
+                    color = AppColors.TextPrimary, lineHeight = 22.sp)
             } else {
                 Text(markUp(RegulationSearch.excerpt(hit.article.body, hit.marks), hit.marks),
-                    fontSize = 12.5.sp, color = Color(0xFF4A5163), lineHeight = 20.sp)
+                    fontSize = 12.5.sp, color = AppColors.TextSecondary, lineHeight = 20.sp)
             }
             Spacer(Modifier.height(8.dp))
             Text(if (open) "접기 ▴" else "탭하면 조문 전문이 펼쳐집니다 ▾",
@@ -535,7 +535,7 @@ private fun FaqChips(onPick: (String) -> Unit) {
                 pair.forEach { q ->
                     Surface(
                         shape = RoundedCornerShape(99.dp),
-                        color = Color.White,
+                        color = AppColors.Surface,
                         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD5DCEC)),
                         modifier = Modifier.clickable { onPick(q) }
                     ) {

@@ -233,8 +233,8 @@ fun QuestionWriteScreen(vm: MainViewModel, onBack: () -> Unit) {
 
 @Composable
 private fun questionFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedContainerColor = Color.White,
-    unfocusedContainerColor = Color.White,
+    focusedContainerColor = AppColors.Surface,
+    unfocusedContainerColor = AppColors.Surface,
     focusedBorderColor = AppColors.Primary,
     unfocusedBorderColor = AppColors.Divider
 )

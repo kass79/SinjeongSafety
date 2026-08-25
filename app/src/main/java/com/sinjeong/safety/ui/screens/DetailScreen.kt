@@ -57,6 +57,7 @@ import com.sinjeong.safety.data.Attachment
 import com.sinjeong.safety.data.Categories
 import com.sinjeong.safety.data.Comment
 import com.sinjeong.safety.data.LinkAttachment
+import com.sinjeong.safety.data.QuizQuestion
 import com.sinjeong.safety.ui.theme.AppColors
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -88,6 +89,13 @@ fun DetailScreen(
     // 답글 대상. null 이면 원댓글을 쓰는 중이다. 깊이는 1단계까지만이라
     // 여기 담기는 건 언제나 원댓글이다(답글에는 답글 버튼을 두지 않는다).
     var replyTo by remember { mutableStateOf<Comment?>(null) }
+
+    // ── 사고사례 퀴즈 ──
+    // 관리자가 검토 중인 초안(저장 전). null 이면 검토 다이얼로그가 없다.
+    var quizDraft by remember { mutableStateOf<List<QuizQuestion>?>(null) }
+    // 승무원이 푸는 중인지. 중간에 닫으면 확인 처리하지 않는다.
+    var showQuiz by remember { mutableStateOf(false) }
+    val aiLoading by vm.aiLoading.collectAsState()
 
     LaunchedEffect(postId) { vm.markRead(postId) }
 
@@ -129,7 +137,7 @@ fun DetailScreen(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = AppColors.Surface)
             )
         },
         // ── 맨 아래 고정 댓글 입력줄 ──
@@ -138,7 +146,7 @@ fun DetailScreen(
         bottomBar = {
             if (post != null) {
                 if (loggedIn) {
-                    Column(Modifier.fillMaxWidth().background(Color.White)) {
+                    Column(Modifier.fillMaxWidth().background(AppColors.Surface)) {
                         // 답글 대상 표시줄 — 지금 누구에게 쓰는 중인지 보이지 않으면
                         // 답글 버튼을 눌러 놓고도 원댓글처럼 느껴진다.
                         replyTo?.let { target ->
@@ -185,8 +193,8 @@ fun DetailScreen(
                                 maxLines = 4,
                                 shape = RoundedCornerShape(20.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = Color.White,
-                                    unfocusedContainerColor = Color.White,
+                                    focusedContainerColor = AppColors.Surface,
+                                    unfocusedContainerColor = AppColors.Surface,
                                     focusedBorderColor = AppColors.Primary,
                                     unfocusedBorderColor = AppColors.Divider
                                 ),
@@ -216,7 +224,7 @@ fun DetailScreen(
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .background(Color.White)
+                            .background(AppColors.Surface)
                             .clickable(onClick = onLoginClick)
                             .padding(vertical = 18.dp),
                         contentAlignment = Alignment.Center
@@ -248,7 +256,7 @@ fun DetailScreen(
         ) {
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = Color.White,
+                color = AppColors.Surface,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(22.dp)) {
@@ -335,15 +343,62 @@ fun DetailScreen(
                         }
                     }
 
+                    val hasQuiz = post.quiz.isNotEmpty()
+
+                    // ── 사고사례 퀴즈 만들기 (관리자만) ──
+                    // WriteScreen 의 "AI 3줄 요약" 알약과 같은 모양. 초안만 만들고 게시는 사람이 한다.
+                    if (isAdmin) {
+                        Spacer(Modifier.height(18.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = AppColors.TagOpsBg,
+                                modifier = Modifier.clickable(enabled = !aiLoading) {
+                                    vm.generateQuizDraft(post.title, post.content) { quizDraft = it }
+                                }
+                            ) {
+                                Box(
+                                    Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (aiLoading) {
+                                        CircularProgressIndicator(
+                                            color = AppColors.TagOpsFg, strokeWidth = 2.dp,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    } else {
+                                        Text(
+                                            if (hasQuiz) "퀴즈 다시 만들기" else "AI 퀴즈 만들기",
+                                            fontSize = 12.5.sp, fontWeight = FontWeight.Bold,
+                                            color = AppColors.TagOpsFg
+                                        )
+                                    }
+                                }
+                            }
+                            if (hasQuiz) {
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    "퀴즈 삭제",
+                                    fontSize = 12.sp,
+                                    color = AppColors.TextHint,
+                                    modifier = Modifier
+                                        .clickable { vm.saveQuiz(postId, emptyList()) {} }
+                                        .padding(vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+
                     // ── 확인(읽음) 버튼 ──
                     Spacer(Modifier.height(20.dp))
                     val confirmed = vm.isConfirmed(postId)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Button(
-                            onClick = { vm.confirmRead(postId) },
+                            // 퀴즈가 붙은 글은 먼저 풀어야 확인 처리된다(틀려도 확인은 된다).
+                            onClick = { if (hasQuiz) showQuiz = true else vm.confirmRead(postId) },
                             enabled = !confirmed,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (confirmed) AppColors.Primary else Color.White,
+                                containerColor = if (confirmed) AppColors.Primary else AppColors.Surface,
                                 contentColor = if (confirmed) Color.White else AppColors.Primary,
                                 disabledContainerColor = AppColors.Primary,
                                 disabledContentColor = Color.White
@@ -354,7 +409,11 @@ fun DetailScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(
-                                if (confirmed) "✓ 확인 완료" else "확인했습니다",
+                                when {
+                                    confirmed -> "✓ 확인 완료"
+                                    hasQuiz -> "퀴즈 풀고 확인"
+                                    else -> "확인했습니다"
+                                },
                                 fontWeight = FontWeight.Bold, fontSize = 14.sp
                             )
                         }
@@ -453,6 +512,178 @@ fun DetailScreen(
             }
         )
     }
+
+    // ── AI 퀴즈 초안 검토 (관리자) ──
+    quizDraft?.let { draft ->
+        AlertDialog(
+            onDismissRequest = { quizDraft = null },
+            title = { Text("퀴즈 검토", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        "AI가 만든 초안입니다. 내용을 확인하고 저장하세요.",
+                        fontSize = 12.5.sp, color = AppColors.TextSecondary
+                    )
+                    draft.forEachIndexed { i, q ->
+                        Spacer(Modifier.height(14.dp))
+                        Text(
+                            "${i + 1}. ${q.q}",
+                            fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                            color = AppColors.TextPrimary, lineHeight = 20.sp
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        q.choices.forEachIndexed { ci, choice ->
+                            val right = ci == q.answer
+                            Text(
+                                (if (right) "✓ " else "· ") + choice,
+                                fontSize = 13.sp, lineHeight = 20.sp,
+                                fontWeight = if (right) FontWeight.Bold else FontWeight.Normal,
+                                color = if (right) AppColors.TagOpsFg else AppColors.TextSecondary
+                            )
+                        }
+                        if (q.explain.isNotBlank()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "해설 · ${q.explain}",
+                                fontSize = 12.sp, lineHeight = 18.sp, color = AppColors.TextHint
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.saveQuiz(postId, draft) { quizDraft = null } }) {
+                    Text("이대로 저장", fontWeight = FontWeight.Bold, color = AppColors.Primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { quizDraft = null }) { Text("취소") }
+            }
+        )
+    }
+
+    // ── 퀴즈 풀기 (승무원) ──
+    if (showQuiz && post != null && post.quiz.isNotEmpty()) {
+        QuizDialog(
+            quiz = post.quiz,
+            onDismiss = { showQuiz = false },   // 중간에 닫으면 확인 처리하지 않는다
+            onDone = { correct, total ->
+                showQuiz = false
+                vm.confirmRead(postId, correct, total)
+            }
+        )
+    }
+}
+
+/**
+ * 사고사례 퀴즈 풀이. 한 문항씩 보여 주고, 보기를 누르면 그 자리에서 정답/오답과 해설을 편다.
+ * 틀려도 막지 않는다 — 해설을 읽히는 게 목적이고, 정답 여부는 기록되어 관리자가 본다.
+ * 다 풀고 [확인 완료]를 눌러야 확인 처리된다(중간에 닫으면 아무 일도 일어나지 않는다).
+ */
+@Composable
+private fun QuizDialog(
+    quiz: List<QuizQuestion>,
+    onDismiss: () -> Unit,
+    onDone: (Int, Int) -> Unit
+) {
+    var index by remember { mutableStateOf(0) }
+    var picked by remember { mutableStateOf<Int?>(null) }
+    var correct by remember { mutableStateOf(0) }
+    var finished by remember { mutableStateOf(false) }
+    val last = index == quiz.lastIndex
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                if (finished) "퀴즈 완료" else "사고사례 퀴즈 ${index + 1}/${quiz.size}",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            if (finished) {
+                Text(
+                    "${quiz.size}문제 중 ${correct}문제 정답",
+                    fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AppColors.TextPrimary
+                )
+            } else {
+                val q = quiz[index]
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        q.q,
+                        fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                        lineHeight = 22.sp, color = AppColors.TextPrimary
+                    )
+                    q.choices.forEachIndexed { ci, choice ->
+                        val answered = picked != null
+                        val isAnswer = ci == q.answer
+                        val wrongPick = picked == ci && !isAnswer
+                        Surface(
+                            shape = RoundedCornerShape(11.dp),
+                            color = if (answered && isAnswer) AppColors.TagOpsBg else AppColors.Surface,
+                            border = androidx.compose.foundation.BorderStroke(
+                                if (wrongPick) 1.5.dp else 1.dp,
+                                if (wrongPick) AppColors.NewBadge else AppColors.Divider
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 10.dp)
+                                .clickable(enabled = !answered) {
+                                    picked = ci
+                                    if (isAnswer) correct++
+                                }
+                        ) {
+                            Text(
+                                choice,
+                                fontSize = 14.sp, lineHeight = 20.sp,
+                                fontWeight = if (answered && isAnswer) FontWeight.Bold
+                                             else FontWeight.Normal,
+                                color = when {
+                                    answered && isAnswer -> AppColors.TagOpsFg
+                                    wrongPick -> AppColors.NewBadge
+                                    else -> AppColors.TextPrimary
+                                },
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                            )
+                        }
+                    }
+                    if (picked != null) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            if (picked == q.answer) "정답입니다" else "오답입니다",
+                            fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                            color = if (picked == q.answer) AppColors.TagOpsFg else AppColors.NewBadge
+                        )
+                        if (q.explain.isNotBlank()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                q.explain,
+                                fontSize = 13.sp, lineHeight = 20.sp, color = AppColors.TextSecondary
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            when {
+                finished -> TextButton(onClick = { onDone(correct, quiz.size) }) {
+                    Text("확인 완료", fontWeight = FontWeight.Bold, color = AppColors.Primary)
+                }
+                picked != null -> TextButton(onClick = {
+                    if (last) finished = true else { index++; picked = null }
+                }) {
+                    Text(
+                        if (last) "결과 보기" else "다음 문제",
+                        fontWeight = FontWeight.Bold, color = AppColors.Primary
+                    )
+                }
+            }
+        },
+        dismissButton = {
+            if (!finished) TextButton(onClick = onDismiss) { Text("닫기") }
+        }
+    )
 }
 
 
@@ -794,7 +1025,7 @@ private fun LinkPreviewCard(link: LinkAttachment) {
     val context = LocalContext.current
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = Color.White,
+        color = AppColors.Surface,
         border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
         modifier = Modifier
             .fillMaxWidth()

@@ -44,6 +44,14 @@ data class LinkAttachment(
         .substringBefore("/")
 }
 
+/** 사고사례 퀴즈 1문항. AI가 초안을 만들고 관리자가 검토해 저장한다. */
+data class QuizQuestion(
+    val q: String = "",
+    val choices: List<String> = emptyList(),
+    val answer: Int = 0,
+    val explain: String = ""
+)
+
 data class Post(
     @DocumentId val id: String = "",
     val category: String = "",      // Categories 중 하나
@@ -65,7 +73,12 @@ data class Post(
      * 올린 시각(createdAt)과 구분해야, 과거 자료를 나중에 올려도
      * 피드 맨 위로 튀어나오지 않는다. 예전 글에는 이 값이 없다.
      */
-    val docDate: Timestamp? = null
+    val docDate: Timestamp? = null,
+    /**
+     * 사고사례 퀴즈. 관리자가 원하는 글에만 단다 — 대부분의 글은 비어 있다.
+     * 틀려도 해설을 보고 확인 처리되므로 통과 강제가 아니다(정답 여부만 기록한다).
+     */
+    val quiz: List<QuizQuestion> = emptyList()
 )
 
 /** 정렬·표시에 쓰는 기준 날짜. 자료 날짜가 없으면 올린 시각으로 대체한다. */
@@ -100,7 +113,13 @@ data class Comment(
 data class CrewConfirm(
     val empNo: String = "",
     val name: String = "",
-    val at: Timestamp? = null
+    val at: Timestamp? = null,
+    /**
+     * 퀴즈 성적. null 은 "퀴즈를 풀지 않았다"는 뜻이다 — 0점(다 틀림)과 구분해야 해서
+     * 0이 아니라 null 로 둔다. 퀴즈 없는 글이나 옛 기록은 항상 null 이다.
+     */
+    val quizCorrect: Int? = null,
+    val quizTotal: Int? = null
 )
 
 /** 확인 현황 화면에 뿌릴 집계. */

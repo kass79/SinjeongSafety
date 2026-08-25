@@ -220,18 +220,56 @@ class PostRepository {
      * 사람 기록이 있어야 관리자가 "누가 아직 안 봤는지"를 볼 수 있다.
      * 문서 id를 사번으로 두어 같은 사람이 폰을 바꿔 눌러도 한 줄만 남는다.
      */
-    suspend fun confirmRead(id: String, empNo: String? = null, name: String? = null) {
+    /**
+     * [quizCorrect]/[quizTotal] 은 퀴즈를 푼 경우에만 들어온다. null 이면 두 필드를
+     * 아예 넣지 않아 예전과 똑같은 문서가 남는다 — 안 푼 사람과 0점을 구분하기 위해서다.
+     *
+     * firestore.rules 는 손댈 필요가 없다: confirms 하위 컬렉션 규칙은
+     * "본인 사번 문서인가"만 보고 필드는 검사하지 않으므로 필드가 늘어도 그대로 통과한다.
+     */
+    suspend fun confirmRead(
+        id: String,
+        empNo: String? = null,
+        name: String? = null,
+        quizCorrect: Int? = null,
+        quizTotal: Int? = null
+    ) {
         postsRef.document(id).update("confirms", FieldValue.increment(1)).await()
         if (empNo.isNullOrBlank()) return
-        runCatching {
-            postsRef.document(id).collection("confirms").document(empNo).set(
-                mapOf(
-                    "empNo" to empNo,
-                    "name" to (name?.trim() ?: ""),
-                    "at" to FieldValue.serverTimestamp()
-                )
-            ).await()
+        val data = mutableMapOf<String, Any>(
+            "empNo" to empNo,
+            "name" to (name?.trim() ?: ""),
+            "at" to FieldValue.serverTimestamp()
+        )
+        if (quizCorrect != null && quizTotal != null) {
+            data["quizCorrect"] = quizCorrect
+            data["quizTotal"] = quizTotal
         }
+        runCatching {
+            postsRef.document(id).collection("confirms").document(empNo).set(data).await()
+        }
+    }
+
+    /**
+     * 사고사례 퀴즈 저장(관리자). 빈 리스트를 주면 빈 배열로 덮어써 퀴즈를 없앤다.
+     *
+     * firestore.rules 는 손댈 필요가 없다: posts update 규칙의 validPost() 는
+     * request.resource.data — 즉 병합이 끝난 뒤의 문서 — 를 검사하므로,
+     * quiz 필드만 바꿔도 문서에 이미 들어 있는 title/content 가 그대로 검사를 통과한다.
+     */
+    suspend fun saveQuiz(postId: String, quiz: List<QuizQuestion>) {
+        auth.currentUser ?: throw IllegalStateException("관리자 로그인이 필요합니다")
+        postsRef.document(postId).update(
+            "quiz",
+            quiz.map {
+                mapOf(
+                    "q" to it.q,
+                    "choices" to it.choices,
+                    "answer" to it.answer,
+                    "explain" to it.explain
+                )
+            }
+        ).await()
     }
 
     // ── 댓글 (posts/{id}/comments) ────────────────────────────
@@ -297,7 +335,10 @@ class PostRepository {
             CrewConfirm(
                 empNo = d.id,
                 name = d.getString("name")?.trim().orEmpty(),
-                at = d.getTimestamp("at")
+                at = d.getTimestamp("at"),
+                // 퀴즈를 안 푼 사람(과 옛 기록)에는 필드 자체가 없다 → null 그대로 둔다.
+                quizCorrect = d.getLong("quizCorrect")?.toInt(),
+                quizTotal = d.getLong("quizTotal")?.toInt()
             )
         }.sortedByDescending { it.at?.seconds ?: 0L }
     }.getOrDefault(emptyList())

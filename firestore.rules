@@ -131,7 +131,7 @@ service cloud.firestore {
 
     // 로그인 강제 스위치. 앱은 읽기만 하고, 값 변경은 콘솔에서 한다.
     match /config/{docId} {
-      allow read: if true;
+      allow read: if docId != 'rosterNames' || isAdmin();
       allow write: if false;
     }
   }

@@ -170,7 +170,7 @@ fun WriteScreen(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = AppColors.Surface)
             )
         }
     ) { padding ->
@@ -194,7 +194,7 @@ fun WriteScreen(
             val dateText = SimpleDateFormat("yyyy년 M월 d일", Locale.KOREA).format(docCal.time)
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = Color.White,
+                color = AppColors.Surface,
                 border = BorderStroke(1.dp, AppColors.Divider),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -296,7 +296,7 @@ fun WriteScreen(
                 // 사진/문서
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = AppColors.Surface.copy(alpha = 0.6f),
                     border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFC6CEE8)),
                     modifier = Modifier
                         .weight(1f)
@@ -314,7 +314,7 @@ fun WriteScreen(
                 // 동영상
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = AppColors.Surface.copy(alpha = 0.6f),
                     border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFC6CEE8)),
                     modifier = Modifier
                         .weight(1f)
@@ -476,7 +476,7 @@ internal fun VideoChip(name: String, size: Long, onRemove: () -> Unit) {
 internal fun LinkRow(link: LinkAttachment, onRemove: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = Color.White,
+        color = AppColors.Surface,
         border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -515,7 +515,7 @@ internal fun FileChip(name: String, size: Long, onRemove: () -> Unit) {
     val (label, color) = fileTypeInfo(name)
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = Color.White,
+        color = AppColors.Surface,
         border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider)
     ) {
         Row(
@@ -570,7 +570,7 @@ internal fun SectionLabel(text: String) {
 private fun SelectChip(text: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(50),
-        color = if (selected) AppColors.Primary else Color.White,
+        color = if (selected) AppColors.Primary else AppColors.Surface,
         border = androidx.compose.foundation.BorderStroke(
             1.dp, if (selected) AppColors.Primary else AppColors.Divider
         ),
@@ -588,8 +588,8 @@ private fun SelectChip(text: String, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun writeFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedContainerColor = Color.White,
-    unfocusedContainerColor = Color.White,
+    focusedContainerColor = AppColors.Surface,
+    unfocusedContainerColor = AppColors.Surface,
     focusedBorderColor = AppColors.Primary,
     unfocusedBorderColor = AppColors.Divider
 )

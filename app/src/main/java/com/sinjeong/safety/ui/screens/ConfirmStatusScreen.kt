@@ -152,6 +152,19 @@ fun ConfirmStatusScreen(vm: MainViewModel, postId: String, onBack: () -> Unit) {
                             Spacer(Modifier.width(8.dp))
                             Text("$percent%", fontSize = 14.sp, color = AppColors.Primary, fontWeight = FontWeight.Bold)
                         }
+                        // 퀴즈를 푼 사람이 한 명이라도 있으면 평균 정답률을 한 줄 덧붙인다.
+                        // 사람별 평균이 아니라 전체 문항 기준이다(문항 수가 글마다 다를 수 있어서).
+                        val takers = data.confirmed.filter { (it.quizTotal ?: 0) > 0 }
+                        if (takers.isNotEmpty()) {
+                            val asked = takers.sumOf { it.quizTotal ?: 0 }
+                            val got = takers.sumOf { it.quizCorrect ?: 0 }
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "퀴즈 평균 정답률 ${got * 100 / asked}% (${takers.size}명 응시)",
+                                fontSize = 12.sp,
+                                color = AppColors.TextSecondary
+                            )
+                        }
                         if (data.anonymous > 0) {
                             Spacer(Modifier.height(6.dp))
                             Text(
@@ -245,6 +258,17 @@ private fun CrewConfirmRow(crew: CrewConfirm, showTime: Boolean) {
                 color = if (crew.name.isBlank()) AppColors.TextHint else AppColors.TextPrimary
             )
             Text(crew.empNo, fontSize = 11.sp, color = AppColors.TextSecondary)
+        }
+        // 퀴즈를 푼 사람만. null 은 "안 풀었다"라서 0점(다 틀림)과 구분된다.
+        crew.quizTotal?.let { total ->
+            val got = crew.quizCorrect ?: 0
+            Text(
+                "퀴즈 $got/$total",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (got == total) AppColors.TagOpsFg else AppColors.CatOrange
+            )
+            Spacer(Modifier.width(10.dp))
         }
         if (showTime) {
             Text(

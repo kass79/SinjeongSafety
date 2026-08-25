@@ -11,7 +11,8 @@ Android(Kotlin/Compose) + Firebase(SinjeongSafety/sinjeongsafety 프로젝트). 
   댓글(실명제) → 검색창 BasicTextField → 로그아웃 게이트 수정(사번 인증된 기기는 안 막음)
 - **홈 출무점호 카드 선택 순서: 오늘 자 > 내용 있는 최신 > 최신.** 이 순서를 깨면
   "올렸는데 안 보인다"(오늘 자가 밀림) 또는 "텅 빈 카드"(빈 문서가 최신) 사고가 재발한다. 둘 다 실제로 났다.
-- 퀴즈(generateQuiz): 서버 함수만 배포됨. **사용자가 앱 연결을 명시적으로 거부**("퀴즈는 안 할래") — 재제안 금지.
+- 퀴즈(generateQuiz): 한 번 거부했다가 **2026-08-25 사용자가 다시 요청해 앱 연결 완료**("1번 적용시켜줘봐").
+  관리자가 원하는 글에만 달고, 틀려도 해설 보고 확인 처리(통과 강제 없음), 정답률은 확인 현황·CSV·PDF에 기록.
 - **Cloud Functions 배포됨**(asia-northeast3, Node22): notifyNewPost(푸시—2026-08-22에야 첫 배포됨),
   askRegulation / summarizePost / generateQuiz(앱 연결은 quiz만 남음). Anthropic API 키는
   Secret Manager `ANTHROPIC_API_KEY`. 모델 claude-opus-5. 로그인 사용자만 호출 가능.
