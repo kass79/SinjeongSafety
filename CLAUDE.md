@@ -23,6 +23,12 @@ Android(Kotlin/Compose) + Firebase(SinjeongSafety/sinjeongsafety 프로젝트). 
   ※ 콘솔 없이 문서를 쓰는 방법: CLI 에 문서 쓰기 명령이 **없고**, 규칙상 admin@sinjeong.app 만 쓸 수
   있으며 그 비밀번호는 다루지 않는다. Admin SDK 권한으로 한 번 쓰고 곧바로 지우는 임시 onRequest
   함수를 배포하는 방식으로 해결했다(랜덤 키로 보호, 커밋 금지, 끝나면 `functions:delete`).
+- **명단 관리(관리자 전용, 설정 > 관리 > 직원 명단 관리, v1.8.0)**: `config/roster` 의
+  `extraIds`(신입) / `removedIds`(퇴직) 델타를 앱에서 고친다. 실제 명단 = (assets 기본 + extra) − removed.
+  함정 셋 — ① 퇴직 시 `extraIds` 를 지우면 안 된다(기본 명단에 없는 신입을 복귀시킬 때 영영 사라진다).
+  ② 이름은 퇴직해도 `rosterNames` 에 남긴다(과거 통계가 그 이름을 쓴다).
+  ③ 퇴직자 로그인 차단은 **`removedIds` 명시적 포함**만 근거로 한다. "명단에 없으면 차단" 으로 만들면
+  오프라인(터널)에서 `config/roster` 를 못 읽을 때 신입사원이 통째로 갇힌다 — 조회 실패는 통과시킨다.
 - 직원 포인트(관리자 전용, 설정 > 관리): 확인 1 / 퀴즈 정답 1 / 댓글 1 / 답변 2점, 월별 집계.
   `collectionGroup` 조회라 **컬렉션 그룹 색인(firestore.indexes.json 의 fieldOverrides)** 과
   **`{path=**}` 재귀 와일드카드 규칙**이 둘 다 있어야 한다. 중첩 규칙은 collectionGroup 에 안 걸린다.
