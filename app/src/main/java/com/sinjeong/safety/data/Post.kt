@@ -19,10 +19,23 @@ data class Attachment(
      * 업로드할 때 자동으로 뽑아 올리며, 추출에 실패했거나 옛 게시물이면 빈 문자열이다
      * — 그 경우 예전처럼 검은 화면 + 재생 버튼으로 나간다(호환).
      */
-    val posterUrl: String = ""
+    val posterUrl: String = "",
+    /**
+     * PDF 를 쪽마다 그림으로 뽑아 올린 주소(1쪽부터 차례대로).
+     * 공문을 열어 보려고 다른 앱으로 나가지 않게, 상세 화면 본문에 이걸 그대로 펼친다.
+     * 올릴 때 만들며, 변환에 실패했거나(암호·손상) 옛 게시물이면 비어 있다 —
+     * 그 경우 예전처럼 파일 행만 나온다(호환).
+     */
+    val pageUrls: List<String> = emptyList(),
+    /**
+     * 원본 PDF 의 전체 쪽 수. [pageUrls] 보다 크면 상한에 걸려 앞쪽만 뽑은 것이고,
+     * 화면은 그 사실을 반드시 알려야 한다 — 조용히 잘리면 "뒷장이 없다"는 사고가 난다.
+     */
+    val pageCount: Int = 0
 ) {
     val isImage: Boolean get() = mimeType.startsWith("image/")
     val isVideo: Boolean get() = mimeType.startsWith("video/")
+    val isPdf: Boolean get() = mimeType == "application/pdf" || extension == "pdf"
     val extension: String get() = name.substringAfterLast('.', "").lowercase()
 }
 

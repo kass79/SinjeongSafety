@@ -14,6 +14,7 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.media.MediaMetadataRetriever
+import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
@@ -79,7 +80,78 @@ class PostRepository {
             // 동영상이면 포스터(첫 화면)도 같이 올린다. 이 함수는 게시물·출무점호·질의응답이
             // 모두 거쳐가는 한 곳이라 여기서 만들면 어느 화면에서 올려도 포스터가 붙는다.
             val poster = if (mimeType.startsWith("video/")) uploadPoster(context, uri, safeName) else ""
-            Attachment(name = name, url = url, mimeType = mimeType, size = size, posterUrl = poster)
+            // PDF 면 쪽마다 그림으로도 올린다. 여기가 세 업로드 경로가 다 지나는 곳이라
+            // 게시물이든 출무점호든 한 번에 붙는다(포스터와 같은 자리, 같은 이유).
+            val isPdf = mimeType == "application/pdf" || name.endsWith(".pdf", ignoreCase = true)
+            val (pageUrls, pageCount) =
+                if (isPdf) uploadPdfPages(context, uri, safeName) else (emptyList<String>() to 0)
+            Attachment(
+                name = name, url = url, mimeType = mimeType, size = size, posterUrl = poster,
+                pageUrls = pageUrls, pageCount = pageCount
+            )
+        }
+    }
+
+    /**
+     * PDF 를 쪽마다 JPEG 로 렌더해 Storage 에 올리고 (주소 목록, 원본 전체 쪽 수) 를 돌려준다.
+     *
+     * 보는 쪽에서 그때그때 렌더하지 않고 올릴 때 한 번 굽는 이유: 승무원 기기에서 즉시 뜨고,
+     * 터널에서도 Coil 캐시가 듣고, 이미 있는 이미지 표시 코드를 그대로 쓴다.
+     *
+     * 긴 변 1600px / JPEG 82 는 사진 축소([shrinkImage])와 같은 눈높이다. 실제 공문
+     * (운전정보 2026-1, A4 가로)으로 확인했다 — 137dpi, 253KB, 본문 글씨가 1:1 로 또렷하다.
+     * 이보다 낮추면(가로 1080 = 92dpi) 작은 글씨가 뭉개진다.
+     *
+     * 흰 바탕을 먼저 깔아야 한다. PDF 는 배경이 비어 있어서 그냥 렌더하면 글씨만 뜨고
+     * 나머지가 새까맣게 나온다.
+     *
+     * 암호가 걸렸거나 손상됐거나 메모리가 모자라면 통째로 삼키고 빈 목록을 준다 —
+     * 그림은 있으면 좋은 것이지 첨부 자체가 아니다. 업로드가 실패해선 안 된다.
+     * 중간에 엎어지면 이미 올린 쪽은 지운다(안 지우면 아무도 안 쓰는 파일이 Storage 에 남는다).
+     */
+    private suspend fun uploadPdfPages(
+        context: Context,
+        uri: Uri,
+        safeName: String
+    ): Pair<List<String>, Int> = withContext(Dispatchers.IO) {
+        val urls = ArrayList<String>()
+        try {
+            val pfd = context.contentResolver.openFileDescriptor(uri, "r")
+                ?: return@withContext emptyList<String>() to 0
+            pfd.use { fd ->
+                PdfRenderer(fd).use { renderer ->
+                    val total = renderer.pageCount
+                    for (i in 0 until minOf(total, MAX_PDF_PAGES)) {
+                        renderer.openPage(i).use { page ->
+                            val scale = 1600f / maxOf(page.width, page.height)
+                            val bmp = Bitmap.createBitmap(
+                                (page.width * scale).toInt().coerceAtLeast(1),
+                                (page.height * scale).toInt().coerceAtLeast(1),
+                                Bitmap.Config.ARGB_8888
+                            )
+                            Canvas(bmp).drawColor(android.graphics.Color.WHITE)
+                            page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                            val out = ByteArrayOutputStream()
+                            bmp.compress(Bitmap.CompressFormat.JPEG, 82, out)
+                            bmp.recycle()
+
+                            val pageRef = storage.reference.child(
+                                "attachments/${System.currentTimeMillis()}_p${i + 1}_$safeName.jpg"
+                            )
+                            val meta = StorageMetadata.Builder().setContentType("image/jpeg").build()
+                            pageRef.putBytes(out.toByteArray(), meta).await()
+                            urls.add(pageRef.downloadUrl.await().toString())
+                        }
+                    }
+                    urls.toList() to total
+                }
+            }
+        } catch (e: Exception) {
+            deleteFiles(urls)
+            emptyList<String>() to 0
+        } catch (e: OutOfMemoryError) {
+            deleteFiles(urls)
+            emptyList<String>() to 0
         }
     }
 
@@ -227,7 +299,8 @@ class PostRepository {
             "authorUid" to user.uid,
             "attachments" to attachments.map {
                 mapOf("name" to it.name, "url" to it.url, "mimeType" to it.mimeType,
-                      "size" to it.size, "posterUrl" to it.posterUrl)
+                      "size" to it.size, "posterUrl" to it.posterUrl,
+                      "pageUrls" to it.pageUrls, "pageCount" to it.pageCount)
             },
             // 새 글에도 링크를 저장한다. 예전엔 이 줄이 없어서 글을 올릴 때 붙인 링크가
             // 조용히 사라지고, 수정 화면에서 다시 넣어야만 남았다(updatePost에는 있었다).
@@ -256,7 +329,8 @@ class PostRepository {
                 "content" to content.trim(),
                 "attachments" to attachments.map {
                     mapOf("name" to it.name, "url" to it.url, "mimeType" to it.mimeType,
-                          "size" to it.size, "posterUrl" to it.posterUrl)
+                          "size" to it.size, "posterUrl" to it.posterUrl,
+                          "pageUrls" to it.pageUrls, "pageCount" to it.pageCount)
                 },
                 "links" to links.map { mapOf("url" to it.url, "title" to it.title) },
                 "updatedAt" to FieldValue.serverTimestamp()
@@ -264,7 +338,8 @@ class PostRepository {
         ).await()
         // 관리자가 첨부를 빼고 저장한 경우, 더 이상 쓰이지 않는 파일을 지운다.
         // 포스터도 keep 에 넣어야 한다 — 빼면 남겨 둔 영상의 포스터가 지워져 썸네일만 깨진다.
-        val keep = attachments.flatMap { listOf(it.url, it.posterUrl) }.toSet()
+        // PDF 쪽 그림도 마찬가지다. 빼면 글을 고쳐 저장만 해도 본문의 공문이 통째로 사라진다.
+        val keep = attachments.flatMap { listOf(it.url, it.posterUrl) + it.pageUrls }.toSet()
         deleteFiles(beforeUrls.filter { it !in keep })
     }
 
@@ -420,9 +495,11 @@ class PostRepository {
         val snap = postsRef.document(id).get().await()
         @Suppress("UNCHECKED_CAST")
         val list = snap.get("attachments") as? List<Map<String, Any?>> ?: emptyList()
-        // 포스터도 같이 걷는다. 안 걷으면 글을 지워도 포스터만 Storage 에 영영 남는다.
-        list.flatMap { listOf(it["url"] as? String, it["posterUrl"] as? String) }
-            .filterNotNull().filter { it.isNotBlank() }
+        // 포스터·PDF 쪽 그림도 같이 걷는다. 안 걷으면 글을 지워도 그것들만 Storage 에 영영 남는다.
+        list.flatMap {
+            listOf(it["url"] as? String, it["posterUrl"] as? String) +
+                ((it["pageUrls"] as? List<*>)?.map { p -> p as? String } ?: emptyList())
+        }.filterNotNull().filter { it.isNotBlank() }
     } catch (e: Exception) {
         emptyList()
     }
@@ -456,5 +533,12 @@ class PostRepository {
 
     companion object {
         fun now(): Timestamp = Timestamp.now()
+
+        /**
+         * 본문에 펼칠 PDF 쪽 수 상한. 운전정보 공문은 보통 1~3쪽이라 10쪽이면 넉넉하고,
+         * 두꺼운 자료(교재 수십 쪽)를 통째로 그림으로 구우면 올리는 데만 몇 분이 걸린다.
+         * 넘치는 쪽은 원문 PDF 로 보게 하고, 잘렸다는 사실은 화면에 표시한다.
+         */
+        const val MAX_PDF_PAGES = 10
     }
 }

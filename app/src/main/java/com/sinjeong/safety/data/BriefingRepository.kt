@@ -82,7 +82,8 @@ class BriefingRepository {
                 "raw" to b.raw,
                 "attachments" to attachments.map {
                     mapOf("name" to it.name, "url" to it.url, "mimeType" to it.mimeType,
-                          "size" to it.size, "posterUrl" to it.posterUrl)
+                          "size" to it.size, "posterUrl" to it.posterUrl,
+                          "pageUrls" to it.pageUrls, "pageCount" to it.pageCount)
                 },
                 "links" to links.map { mapOf("url" to it.url, "title" to it.title) },
                 "createdAt" to FieldValue.serverTimestamp()
@@ -212,7 +213,10 @@ class BriefingRepository {
                         mimeType = it["mimeType"] as? String ?: "",
                         size = (it["size"] as? Number)?.toLong() ?: 0L,
                         // 손으로 읽는 곳이라 여기에 안 적으면 저장은 되는데 읽을 때만 사라진다.
-                        posterUrl = it["posterUrl"] as? String ?: ""
+                        posterUrl = it["posterUrl"] as? String ?: "",
+                        pageUrls = (it["pageUrls"] as? List<*>)
+                            ?.mapNotNull { p -> p as? String } ?: emptyList(),
+                        pageCount = (it["pageCount"] as? Number)?.toInt() ?: 0
                     )
                 } ?: emptyList()
 

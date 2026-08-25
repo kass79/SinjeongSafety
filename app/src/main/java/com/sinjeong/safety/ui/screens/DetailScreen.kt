@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
@@ -39,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import android.widget.MediaController
 import android.widget.VideoView
@@ -336,6 +338,17 @@ fun DetailScreen(
                         post.links.forEach { link ->
                             LinkPreviewCard(link)
                             Spacer(Modifier.height(10.dp))
+                        }
+                    }
+                    // ── PDF 공문: 쪽 그림을 본문에 그대로 펼친다 ──
+                    // 눌러서 다른 앱으로 나가지 않고도 읽히게. 원문 PDF 는 아래 파일 행에 그대로 남는다
+                    // (인쇄·저장이 필요한 사람이 있다). 쪽 그림이 없는 옛 게시물은 예전처럼 파일 행만.
+                    val pdfs = docs.filter { it.pageUrls.isNotEmpty() }
+                    if (pdfs.isNotEmpty()) {
+                        Spacer(Modifier.height(16.dp))
+                        pdfs.forEach { pdf ->
+                            PdfPages(pdf)
+                            Spacer(Modifier.height(12.dp))
                         }
                     }
                     // ── 첨부 문서 목록 ──
@@ -806,6 +819,53 @@ private fun AttachmentGallery(images: List<Attachment>) {
                 }
                 if (rowImages.size == 1 && images.size > 1) Spacer(Modifier.weight(1f))
             }
+        }
+    }
+}
+
+// ── PDF 공문 펼쳐 보기 (세로로 이어 붙임 — 공문은 세로로 읽는다) ──
+// 2열 격자(AttachmentGallery)는 문서에 맞지 않는다. 원본 비율 그대로 폭을 꽉 채우고,
+// 탭하면 사진과 똑같이 원본을 열어 확대해 볼 수 있게 한다.
+@Composable
+private fun PdfPages(doc: Attachment) {
+    val context = LocalContext.current
+    val shown = doc.pageUrls.size
+    // 옛 문서나 쪽 수를 못 읽은 경우를 대비해 실제 펼친 장수보다 작아지지 않게 잡는다.
+    val total = maxOf(doc.pageCount, shown)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        doc.pageUrls.forEachIndexed { i, pageUrl ->
+            AsyncImage(
+                model = pageUrl,
+                contentDescription = "${doc.name} ${i + 1}쪽",
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    // 흰 종이가 흰 배경에 묻히지 않게 종이 가장자리를 그어 준다.
+                    .border(1.dp, AppColors.Divider, RoundedCornerShape(10.dp))
+                    .clickable {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(pageUrl)))
+                    }
+            )
+            if (total > 1) {
+                Text(
+                    "${i + 1} / $total",
+                    fontSize = 11.sp,
+                    color = AppColors.TextHint,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+        // 상한에 걸려 뒷장을 못 뽑았으면 반드시 말해 준다. 조용히 자르면 "뒷장이 없다"는 사고가 난다.
+        if (total > shown) {
+            Text(
+                "전체 ${total}쪽 중 앞 ${shown}쪽만 펼쳤습니다 — 나머지는 아래 원문 PDF 를 눌러 보세요",
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = AppColors.CatOrange,
+                modifier = Modifier.padding(top = 2.dp)
+            )
         }
     }
 }

@@ -352,43 +352,25 @@ private fun HeaderBar(
                 .background(Color(0xFFE8F0FC))
                 .border(2.dp, Color.White, RoundedCornerShape(15.dp))
         )
-        Spacer(Modifier.width(if (narrow) 7.dp else 10.dp))
-        Column(Modifier.weight(1f)) {
-            // 사업소명과 날씨를 한 줄에 둔다(사용자 요청). 날씨는 '정보'지 '동작'이 아니라
-            // 오른쪽 버튼 무리(설정·관리자)에 섞이면 성격이 잘못 읽힌다.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // maxLines 없이 두면 폭이 모자랄 때 제목이 세 줄까지 늘어나 헤더가 화면을 먹는다.
-                // 좁은 화면에서 자리가 부족하면 날씨 칩이 아니라 제목이 먼저 줄어야 하므로
-                // weight(fill = false) — 제 폭만 쓰되 모자라면 양보한다.
-                Text(
-                    "신정승무사업소",
-                    fontSize = if (narrow) hsp(16.0) else hsp(17.5),
-                    // 줄높이를 글자 크기에 붙여 둔다. 기본값은 글꼴이 위아래로 여백을 크게 잡아
-                    // 두 줄 묶음이 아래로 처져 보이고, 옆의 마스코트와 높낮이가 어긋난다.
-                    lineHeight = if (narrow) hsp(18.0) else hsp(19.5),
-                    fontWeight = FontWeight.ExtraBold,
-                    color = AppColors.Primary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                Spacer(Modifier.width(7.dp))
-                // 날씨 타일 — 맨 왼쪽 마스코트와 **같은 크기·같은 모서리**로 맞춘다(사용자 요청).
-                // 헤더에 놓인 네모 타일이 둘뿐이라 크기가 어긋나면 바로 눈에 띈다.
-                // 이모지 위 / 기온 아래로 쌓아 40dp 안에 둘 다 넣는다.
-                // 특보는 주황 테두리 + 점 하나로만 알린다(뱃지를 한 줄 더 얹으면 헤더 높이가 밀린다).
-                Box {
-                    Surface(
-                        shape = RoundedCornerShape(15.dp),
-                        color = AppColors.Surface,
-                        border = androidx.compose.foundation.BorderStroke(
-                            if (warnActive) 1.5.dp else 1.dp,
-                            if (warnActive) Color(0xFFFF8A3D) else AppColors.Divider
-                        ),
-                        modifier = Modifier
-                            .size(if (narrow) 36.dp else 40.dp)
-                            .clickable { showWeatherDialog = true }
-                    ) {
+        Spacer(Modifier.width(if (narrow) 6.dp else 8.dp))
+
+        // 날씨 타일 — 마스코트와 **나란히** 둔다. 예전에는 사업소명과 같은 줄(Column 안)에
+        // 있어서 두 줄 묶음의 윗줄에만 걸렸고, 그래서 옆의 마스코트보다 위로 떠 높이가 어긋났다.
+        // 바깥 Row 로 꺼내면 마스코트와 똑같이 세로 가운데에 놓인다.
+        // 테두리는 눌러 놓았다 — 진한 선이 마스코트의 부드러운 타일과 따로 놀았다.
+        // 특보일 때만 주황으로 또렷하게 살린다(그때는 눈에 띄어야 한다).
+        Box {
+            Surface(
+                shape = RoundedCornerShape(15.dp),
+                color = AppColors.Surface,
+                border = androidx.compose.foundation.BorderStroke(
+                    if (warnActive) 1.5.dp else 1.dp,
+                    if (warnActive) Color(0xFFFF8A3D) else AppColors.Divider.copy(alpha = 0.45f)
+                ),
+                modifier = Modifier
+                    .size(if (narrow) 36.dp else 40.dp)
+                    .clickable { showWeatherDialog = true }
+            ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
@@ -413,18 +395,32 @@ private fun HeaderBar(
                             }
                         }
                     }
-                    if (warnActive) {
-                        Box(
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .size(9.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFFF6B00))
-                                .border(1.5.dp, AppColors.Background, CircleShape)
-                        )
-                    }
-                }
+            if (warnActive) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .size(9.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFF6B00))
+                        .border(1.5.dp, AppColors.Background, CircleShape)
+                )
             }
+        }
+        Spacer(Modifier.width(if (narrow) 7.dp else 10.dp))
+
+        Column(Modifier.weight(1f)) {
+            // maxLines 없이 두면 폭이 모자랄 때 제목이 세 줄까지 늘어나 헤더가 화면을 먹는다.
+            Text(
+                "신정승무사업소",
+                fontSize = if (narrow) hsp(16.0) else hsp(17.5),
+                // 줄높이를 글자 크기에 붙여 둔다. 기본값은 글꼴이 위아래로 여백을 크게 잡아
+                // 두 줄 묶음이 아래로 처져 보이고, 옆의 타일들과 높낮이가 어긋난다.
+                lineHeight = if (narrow) hsp(18.0) else hsp(19.5),
+                fontWeight = FontWeight.ExtraBold,
+                color = AppColors.Primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
