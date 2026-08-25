@@ -14,8 +14,9 @@ Android(Kotlin/Compose) + Firebase(SinjeongSafety/sinjeongsafety 프로젝트). 
 - 퀴즈(generateQuiz): 한 번 거부했다가 **2026-08-25 사용자가 다시 요청해 앱 연결 완료**("1번 적용시켜줘봐").
   관리자가 원하는 글에만 달고, 틀려도 해설 보고 확인 처리(통과 강제 없음), 정답률은 확인 현황·CSV·PDF에 기록.
 - **Cloud Functions 배포됨**(asia-northeast3, Node22): notifyNewPost(푸시—2026-08-22에야 첫 배포됨),
-  askRegulation / summarizePost / generateQuiz(앱 연결은 quiz만 남음). Anthropic API 키는
-  Secret Manager `ANTHROPIC_API_KEY`. 모델 claude-opus-5. 로그인 사용자만 호출 가능.
+  askRegulation / summarizePost / generateQuiz(OX 1문항) / extractImageText(공문 사진→본문, v1.13.0
+  "사진 글로 정리" 버튼이 호출 — base64 는 **NO_WRAP** 필수, 기본값은 줄바꿈이 섞여 서버가 디코드 실패).
+  Anthropic API 키는 Secret Manager `ANTHROPIC_API_KEY`. 모델 claude-opus-5. 로그인 사용자만 호출 가능.
 - Firebase CLI가 이 PC에 kass 계정으로 로그인돼 있어 `firebase deploy --only functions` 직접 가능.
 - 확인 현황: `posts/{글}/confirms/{사번}`. 미확인 = 명단(assets+config/roster) − 확인 사번.
 - **직원 실명: `config/rosterNames` = `{names: {사번: 이름}}` 282명 (2026-08-25 업로드 완료).**
