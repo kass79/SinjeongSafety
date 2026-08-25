@@ -129,6 +129,21 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── 컬렉션 그룹 조회용 규칙 (직원 포인트 현황) ─────────────────────
+    // 위의 중첩 규칙(match /posts/{postId}/comments/{id})은 collectionGroup 조회에
+    // **적용되지 않는다**. 컬렉션 그룹 조회는 재귀 와일드카드 {path=**} 로 시작하는
+    // 규칙에만 걸리기 때문에, 이게 없으면 조회가 통째로 PERMISSION_DENIED 로 막힌다.
+    // 권한은 위의 중첩 규칙과 똑같이 맞춘다(읽기만 — 쓰기는 기존 규칙에 그대로 둔다).
+    match /{path=**}/confirms/{empNo} {
+      allow read: if isAdmin();
+    }
+    match /{path=**}/comments/{commentId} {
+      allow read: if true;
+    }
+    match /{path=**}/answers/{answerId} {
+      allow read: if true;
+    }
+
     // 로그인 강제 스위치. 앱은 읽기만 하고, 값 변경은 콘솔에서 한다.
     match /config/{docId} {
       allow read: if docId != 'rosterNames' || isAdmin();

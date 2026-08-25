@@ -28,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.Notifications
@@ -67,7 +68,7 @@ import com.sinjeong.safety.ui.theme.AppColors
  * 헤더 ⚙️ 아이콘으로 들어온다. 로그인하지 않은 상태에서도 열 수 있다.
  */
 @Composable
-fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
+fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenPoints: () -> Unit = {}) {
 
     val context = LocalContext.current
     val crewName by vm.crewName.collectAsState()
@@ -206,6 +207,47 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
 
                 Spacer(Modifier.height(22.dp))
+
+                // ── 관리 (관리자에게만 보인다) ─────────────────
+                if (isAdmin) {
+                    SectionTitle("관리")
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = AppColors.Surface),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable(onClick = onOpenPoints)
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Outlined.EmojiEvents,
+                                contentDescription = null,
+                                tint = AppColors.Primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "직원 포인트 현황",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AppColors.TextPrimary
+                                )
+                                Text(
+                                    "확인·퀴즈·댓글·답변을 월별로 집계합니다",
+                                    fontSize = 12.5.sp,
+                                    color = AppColors.TextSecondary
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(22.dp))
+                }
 
                 // ── 알림 ─────────────────────────────────────
                 SectionTitle("알림")

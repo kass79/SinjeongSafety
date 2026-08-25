@@ -26,6 +26,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.sinjeong.safety.ui.screens.BriefingListScreen
 import com.sinjeong.safety.ui.screens.BriefingWriteScreen
+import com.sinjeong.safety.ui.screens.AdminPointsScreen
 import com.sinjeong.safety.ui.screens.ConfirmStatusScreen
 import com.sinjeong.safety.ui.screens.CrewLoginScreen
 import com.sinjeong.safety.ui.screens.SettingsScreen
@@ -51,6 +52,7 @@ object Routes {
     const val REGULATION = "regulation"
     const val REG_ASK = "reg_ask"             // 규정에 물어보기 (기기 안 검색)
     const val CONFIRMS = "confirms/{postId}"  // 확인 현황 (관리자)
+    const val POINTS = "points"               // 직원 포인트 현황 (관리자)
     const val QUESTIONS = "questions"                // 질의응답 목록
     const val QUESTION_WRITE = "question_write"      // 질문 작성
     const val QUESTION_DETAIL = "question/{questionId}"
@@ -127,7 +129,15 @@ class MainActivity : ComponentActivity() {
                             }
 
                             composable(Routes.SETTINGS) {
-                                SettingsScreen(vm = vm, onBack = { nav.popBackStack() })
+                                SettingsScreen(
+                                    vm = vm,
+                                    onBack = { nav.popBackStack() },
+                                    onOpenPoints = { nav.navigate(Routes.POINTS) }
+                                )
+                            }
+
+                            composable(Routes.POINTS) {
+                                AdminPointsScreen(onBack = { nav.popBackStack() })
                             }
 
                             composable(Routes.REGULATION) {
