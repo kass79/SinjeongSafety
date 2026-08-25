@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Base64
 import com.sinjeong.safety.data.Attachment
 import com.sinjeong.safety.data.Comment
 import com.sinjeong.safety.data.ConfirmReport
@@ -777,6 +778,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 onResult(aiRepo.summarizePost(title, content))
             } catch (e: Exception) {
                 _message.value = UiMessage("AI 요약 실패: ${e.localizedMessage}", true)
+            } finally {
+                _aiLoading.value = false
+            }
+        }
+    }
+
+    /**
+     * 공문 사진 → 본문 텍스트 초안. 저장하지 않고 화면이 사람에게 먼저 보여 준다(3줄 요약과 같은 방식).
+     *
+     * 긴 변 1568px / JPEG 80 으로 줄여 보낸다. 사진 한 장이 base64 로 5MB 를 넘으면 서버가 거부하는데,
+     * 이 크기면 보통 1MB 안쪽이라 한도에 닿지 않는다(업로드용 1600/82 와 눈높이가 거의 같다).
+     * 서버가 한 번에 3장까지만 받으므로 넘치면 앞에서부터 3장만 쓰고 그 사실을 알린다.
+     */
+    fun extractImageText(uris: List<Uri>, onResult: (String) -> Unit) {
+        if (!aiAllowed()) return
+        if (uris.isEmpty()) return
+        val max = 3   // 서버가 한 번에 받는 사진 장수
+        val use = uris.take(max)
+        viewModelScope.launch {
+            _aiLoading.value = true
+            try {
+                if (uris.size > max) {
+                    _message.value = UiMessage("사진이 ${uris.size}장이라 앞 ${max}장만 읽습니다")
+                }
+                val images = use.map { uri ->
+                    val bytes = repo.shrinkImage(appContext, uri, 1568, 80)
+                        ?: throw IllegalStateException("사진을 읽지 못했습니다")
+                    // NO_WRAP: 기본값은 줄바꿈을 섞어 넣어 서버가 그대로 디코드하지 못한다.
+                    Base64.encodeToString(bytes, Base64.NO_WRAP)
+                }
+                onResult(aiRepo.extractImageText(images))
+            } catch (e: Exception) {
+                _message.value = UiMessage("사진 정리 실패: ${e.localizedMessage}", true)
             } finally {
                 _aiLoading.value = false
             }

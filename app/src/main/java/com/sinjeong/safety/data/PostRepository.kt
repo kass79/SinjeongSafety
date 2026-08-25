@@ -219,7 +219,8 @@ class PostRepository {
      * 투명 배경(PNG)이 검게 나오지 않도록 흰 바탕에 그린다.
      * 실패하면 null을 돌려주고 호출한 쪽이 원본을 올린다.
      */
-    private suspend fun shrinkImage(
+    // AI 사진 정리(MainViewModel.extractImageText)도 이 축소를 그대로 쓴다.
+    internal suspend fun shrinkImage(
         context: Context,
         uri: Uri,
         maxDim: Int = 1600,

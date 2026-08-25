@@ -28,6 +28,19 @@ class AiRepository {
     }
 
     /**
+     * 공문 사진(base64 JPEG) → 정리된 본문 텍스트.
+     * 서버가 사진 1~3장, 한 장당 base64 5MB 까지만 받는다 — 부르는 쪽에서 줄여 보낸다.
+     * 결과는 초안이다. 곧바로 저장하지 않고 화면이 관리자에게 먼저 보여 준다.
+     */
+    suspend fun extractImageText(images: List<String>): String {
+        val data = hashMapOf("images" to images)
+        val result = fn.getHttpsCallable("extractImageText").call(data).await()
+        @Suppress("UNCHECKED_CAST")
+        return (result.data as? Map<String, Any?>)?.get("text") as? String
+            ?: throw IllegalStateException("응답이 비었습니다")
+    }
+
+    /**
      * 사고사례 퀴즈 초안(보통 2문제). 결과는 바로 저장하지 않고 관리자가 검토한다.
      * 정답 번호는 서버가 Double 로 줄 수도 있어 Number 로 받고,
      * 보기 개수를 벗어난 값이 와도 화면이 깨지지 않도록 범위 안으로 조인다.

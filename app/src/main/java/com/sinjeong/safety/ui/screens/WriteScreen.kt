@@ -77,6 +77,8 @@ fun WriteScreen(
     val aiLoading by vm.aiLoading.collectAsState()
     // AI 요약은 곧바로 본문에 넣지 않는다 — 사람이 먼저 보고 결정한다
     var aiSummary by remember { mutableStateOf<String?>(null) }
+    // 사진에서 뽑은 본문 초안. 본문이 비어 있으면 바로 넣고, 쓰던 글이 있을 때만 여기 담아 물어본다.
+    var extractedText by remember { mutableStateOf<String?>(null) }
 
     var category by remember { mutableStateOf(editing?.category ?: Categories.HUMAN_ERROR) }
     // 자료 날짜 — 과거 자료를 올릴 때 실제 날짜로 바꾼다. 기본값은 오늘.
@@ -250,6 +252,41 @@ fun WriteScreen(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 SectionLabel("내용")
                 Spacer(Modifier.weight(1f))
+                // 첨부한 공문 사진을 AI가 읽어 본문 초안을 만든다.
+                // 이번에 고른 사진만 쓴다 — 이미 올라간 첨부는 주소라서 파일로 열 수 없다.
+                val photoUris = newFiles.filter { it.isImage }.map { it.uri }
+                val photoReady = photoUris.isNotEmpty() && !isUploading
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = if (photoReady) AppColors.TagSafetyBg
+                            else AppColors.TagSafetyBg.copy(alpha = 0.45f),
+                    modifier = Modifier
+                        .padding(bottom = 8.dp, end = 6.dp)
+                        .clickable(enabled = photoReady && !aiLoading) {
+                            vm.extractImageText(photoUris) { text ->
+                                // 쓰던 글을 덮어쓰지 않는다. 비어 있을 때만 바로 채운다.
+                                if (content.isBlank()) content = text else extractedText = text
+                            }
+                        }
+                ) {
+                    Box(
+                        Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (aiLoading) {
+                            CircularProgressIndicator(
+                                color = AppColors.TagSafetyFg, strokeWidth = 2.dp,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        } else {
+                            Text(
+                                "사진 글로 정리", fontSize = 12.5.sp, fontWeight = FontWeight.Bold,
+                                color = if (photoReady) AppColors.TagSafetyFg
+                                        else AppColors.TagSafetyFg.copy(alpha = 0.45f)
+                            )
+                        }
+                    }
+                }
                 // 짧은 글은 요약할 게 없다 (서버 왕복만 낭비)
                 val aiReady = content.length >= 100 && !isUploading
                 Surface(
@@ -435,6 +472,52 @@ fun WriteScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { aiSummary = null }) {
+                        Text("취소", color = AppColors.TextSecondary)
+                    }
+                }
+            )
+        }
+
+        // 사진에서 정리한 글 — 본문에 쓰던 글이 있을 때만 뜬다.
+        // 덮어쓰기를 기본으로 두지 않는다. 쓰던 글이 통째로 날아가는 게 제일 나쁜 사고다.
+        extractedText?.let { text ->
+            AlertDialog(
+                onDismissRequest = { extractedText = null },
+                title = { Text("사진에서 정리한 글", fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+                text = {
+                    Column(
+                        Modifier
+                            .heightIn(max = 280.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            "본문에 이미 쓰던 글이 있습니다. 어떻게 할까요?",
+                            fontSize = 12.5.sp, color = AppColors.TextSecondary, lineHeight = 18.sp
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text(text, fontSize = 13.5.sp, lineHeight = 21.sp,
+                            color = AppColors.TextPrimary)
+                    }
+                },
+                confirmButton = {
+                    Row {
+                        TextButton(onClick = {
+                            content = text
+                            extractedText = null
+                        }) {
+                            Text("바꾸기", color = AppColors.TextSecondary)
+                        }
+                        TextButton(onClick = {
+                            content = content.trimEnd() + "\n\n" + text
+                            extractedText = null
+                        }) {
+                            Text("끝에 덧붙이기", fontWeight = FontWeight.Bold,
+                                color = AppColors.Primary)
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { extractedText = null }) {
                         Text("취소", color = AppColors.TextSecondary)
                     }
                 }

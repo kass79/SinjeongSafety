@@ -55,17 +55,27 @@ function requireAuth(request) {
   }
 }
 
-/** Claude 호출. 안전분류기가 거부하면 Opus 계열로 자동 우회(fallbacks)한다. */
-async function askClaude({ system, user, maxTokens = 2000 }) {
+/**
+ * Claude 호출. 안전분류기가 거부하면 Opus 계열로 자동 우회(fallbacks)한다.
+ * images: base64 JPEG 배열(선택). 공문 사진 → 텍스트 정리에 쓴다.
+ */
+async function askClaude({ system, user, images = [], maxTokens = 2000 }) {
   const Anthropic = require("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey: anthropicKey.value() });
+  const content = [
+    ...images.map((data) => ({
+      type: "image",
+      source: { type: "base64", media_type: "image/jpeg", data },
+    })),
+    { type: "text", text: user },
+  ];
   const response = await client.beta.messages.create({
     model: "claude-opus-5",
     max_tokens: maxTokens,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     system,
-    messages: [{ role: "user", content: user }],
+    messages: [{ role: "user", content }],
   });
   if (response.stop_reason === "refusal") {
     throw new HttpsError("failed-precondition", "답변할 수 없는 요청입니다");
@@ -175,4 +185,38 @@ exports.generateQuiz = onCall(AI_OPTS, async (request) => {
     throw new HttpsError("internal", "문제 생성에 실패했습니다. 다시 시도해주세요");
   }
   return { questions };
+});
+
+/**
+ * 공문 사진 → 본문 텍스트 정리. 글쓰기 화면에서 관리자가 사진을 고르면
+ * 그 내용을 게시물 본문으로 옮겨 적어 준다(결과는 초안 — 관리자가 검토 후 게시).
+ * 이미지는 앱이 긴 변 1568px JPEG 로 줄여 base64 로 보낸다(최대 3장).
+ */
+exports.extractImageText = onCall(AI_OPTS, async (request) => {
+  requireAuth(request);
+  const images = Array.isArray(request.data?.images) ? request.data.images : [];
+  if (images.length === 0 || images.length > 3) {
+    throw new HttpsError("invalid-argument", "사진을 확인해주세요 (1~3장)");
+  }
+  // base64 5MB ≈ 원본 3.7MB. Claude 의 장당 한도(5MB)와 요금을 함께 막는다.
+  for (const img of images) {
+    if (typeof img !== "string" || img.length > 5 * 1024 * 1024) {
+      throw new HttpsError("invalid-argument", "사진이 너무 큽니다");
+    }
+  }
+
+  const text = await askClaude({
+    system:
+      "지하철 승무사업소 안전 공문·문서 사진을 게시물 본문으로 옮겨 적는 서기입니다.\n" +
+      "- 사진 속 글을 빠짐없이, 문서의 구조(제목·항목 번호·들여쓰기)를 살려 일반 텍스트로 옮기세요.\n" +
+      "- 표는 '항목: 값' 줄들로 풀어 쓰세요.\n" +
+      "- 도장·서명·결재란·머리글·쪽번호는 빼세요.\n" +
+      "- 사진에 없는 내용을 지어내지 마세요. 글씨가 안 보이면 그 자리에 (판독불가)로 표시하세요.\n" +
+      "- 마크다운 기호(**, ##) 없이 일반 텍스트로. 번호와 줄바꿈만 쓰세요.\n" +
+      "- 여러 장이면 순서대로 이어 붙이세요.",
+    user: "이 사진의 내용을 게시물 본문으로 정리해 주세요.",
+    images,
+    maxTokens: 4000,
+  });
+  return { text };
 });
