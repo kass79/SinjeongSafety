@@ -73,6 +73,19 @@ anthropic-skills:sinjeong-safety-app 스킬에는 "사용자가 GitHub 웹에서
   이렇게 잘못 전달한 적이 있습니다. 전달용은 항상
   `gh run download <runId> -n sinjeong-safety-debug-apk`. 로컬 빌드는 컴파일 검증 전용.
 
+- **첨부(Attachment)에 필드를 추가하면 여섯 곳을 같이 고칠 것.** 손으로 직렬화하는 구조라 하나만
+  빠뜨려도 저장은 되는데 다시 읽을 때 사라진다(예전에 `links` 가 실제로 그렇게 사라졌다):
+  `PostRepository.addPost` / `updatePost` / `updatePost` 의 `keep` 집합 / `attachmentUrlsOf` /
+  `BriefingRepository.save` / `BriefingRepository.toBriefing`. 뒤의 둘 중 `toBriefing` 이 손수 읽는 자리다.
+  `keep` 을 빠뜨리면 **첨부를 그대로 두고 저장만 해도** 파일이 '안 쓰는 것'으로 지워지고,
+  `attachmentUrlsOf` 를 빠뜨리면 글을 지워도 Storage 에 파일이 남는다.
+- **미디어 변환 함정 둘(둘 다 실측으로 잡았다. 검은 화면이 나오면 여기를 의심할 것):**
+  ① 동영상 썸네일은 `OPTION_CLOSEST` 로 뽑는다. 흔히 쓰는 `OPTION_CLOSEST_SYNC` 는 "가장 가까운
+  키프레임"을 주는데, 교육영상들의 키프레임이 0초 다음 8.33초라 2초를 요청해도 0초(페이드인 전
+  **검은 화면**)가 돌아온다.
+  ② `PdfRenderer` 로 굽기 전에 **흰 바탕을 깔 것**(`drawColor(WHITE)`). PDF 배경은 투명이라
+  안 깔면 검은 본문 글씨가 검은 화면에 통째로 묻힌다.
+  그리고 운전정보 공문은 **A4 가로**다 — 가로 1080 은 92dpi 라 글씨가 뭉갠다. 긴 변 1600(137dpi)을 쓴다.
 - **입력창을 새로 만들면 반드시 `Modifier.imePadding()` 을 붙일 것.** 매니페스트의
   `windowSoftInputMode="adjustResize"` 는 **더 이상 동작하지 않는다** — targetSdk 35+ 부터 안드로이드가
   edge-to-edge 를 강제하고 36 에선 opt-out 도 없어서, 창이 키보드만큼 줄지 않고 IME 는 앱이 직접
