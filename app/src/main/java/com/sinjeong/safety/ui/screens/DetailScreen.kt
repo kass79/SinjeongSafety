@@ -141,12 +141,16 @@ fun DetailScreen(
             )
         },
         // ── 맨 아래 고정 댓글 입력줄 ──
-        // 질의응답 화면과 같은 방식이다. 매니페스트가 adjustResize 라 키보드가 뜨면
-        // 창 자체가 줄어들고 이 줄이 키보드 위로 올라온다(별도 imePadding 불필요).
+        // 질의응답 화면과 같은 방식이다. 예전에는 매니페스트의 adjustResize 가 키보드만큼
+        // 창을 줄여 줘서 이 줄이 저절로 올라왔는데, targetSdk 35+ 부터 안드로이드가
+        // edge-to-edge 를 강제하면서 **창이 더 이상 줄지 않는다**(36 에선 opt-out 도 없다).
+        // 그래서 키보드가 이 줄을 그대로 덮어 "쓰는 내용이 안 보인다"는 신고가 나왔다.
+        // 규정 검색 화면(RegulationAskScreen)이 이미 쓰는 방식대로 직접 인셋을 준다.
         bottomBar = {
             if (post != null) {
                 if (loggedIn) {
-                    Column(Modifier.fillMaxWidth().background(AppColors.Surface)) {
+                    // background 를 imePadding 앞에 둬야 키보드 위 여백까지 같은 색으로 칠해진다.
+                    Column(Modifier.fillMaxWidth().background(AppColors.Surface).imePadding()) {
                         // 답글 대상 표시줄 — 지금 누구에게 쓰는 중인지 보이지 않으면
                         // 답글 버튼을 눌러 놓고도 원댓글처럼 느껴진다.
                         replyTo?.let { target ->

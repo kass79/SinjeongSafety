@@ -166,10 +166,15 @@ fun HomeScreen(
             }
         }
     ) { padding ->
+        // imePadding: 검색창에 글자를 넣으면 키보드가 목록 아래쪽을 덮는데, 안드로이드 16의
+        // edge-to-edge 강제로 창이 더 이상 줄지 않아 덮인 부분까지 스크롤이 닿지 않는다
+        // (매니페스트의 adjustResize 는 targetSdk 35+ 에서 무력하다 — 댓글창 가림과 같은 원인).
+        // 헤더가 목록의 첫 항목이라 목록만 줄이면 헤더는 그대로 있고 아래만 키보드를 피한다.
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(padding)
+                .imePadding(),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
             item {
@@ -337,40 +342,6 @@ private fun HeaderBar(
         val warning = weather?.warning
         val warnActive = warning != null
 
-        // 날씨는 '정보'지 '동작'이 아니다. 오른쪽 버튼 무리에 섞여 있으면 설정·관리자와
-        // 같은 성격으로 읽히므로, 신정승무캘린더처럼 왼쪽 정보 영역으로 옮겼다(사용자 요청).
-        Box {
-            Surface(
-                shape = CircleShape,
-                color = AppColors.Surface,
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    if (warnActive) Color(0xFFFF8A3D) else AppColors.Divider
-                ),
-                modifier = Modifier.size(btnSize).clickable { showWeatherDialog = true }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        weather?.emoji ?: "⛅",
-                        fontSize = if (narrow) hsp(15.0) else hsp(17.0),
-                        maxLines = 1
-                    )
-                }
-            }
-            // 특보는 점 하나로만 알린다. 전문은 눌러서 본다.
-            if (warnActive) {
-                Box(
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFFF6B00))
-                        .border(1.5.dp, AppColors.Background, CircleShape)
-                )
-            }
-        }
-        Spacer(Modifier.width(iconGap))
-
         Image(
             painter = painterResource(R.drawable.mascot_hello),
             contentDescription = "마스코트",
@@ -383,25 +354,65 @@ private fun HeaderBar(
         )
         Spacer(Modifier.width(if (narrow) 7.dp else 10.dp))
         Column(Modifier.weight(1f)) {
-            // maxLines 없이 두면 폭이 모자랄 때 제목이 세 줄까지 늘어나 헤더가 화면을 먹는다.
-            // 19sp 였을 때는 넓은 화면에서도 제목 끝이 날씨 칩에 닿아 말줄임이 걸렸다.
-            // 17sp 로 낮추니 사업소명이 온전히 보이면서 칩·아이콘과 무게가 맞는다.
-            Text(
-                "신정승무사업소",
-                fontSize = if (narrow) hsp(15.0) else hsp(16.0),
-                // 줄높이를 글자 크기에 붙여 둔다. 기본값은 글꼴이 위아래로 여백을 크게 잡아
-                // 두 줄 묶음이 아래로 처져 보이고, 옆의 마스코트와 높낮이가 어긋난다.
-                lineHeight = if (narrow) hsp(17.0) else hsp(18.0),
-                fontWeight = FontWeight.ExtraBold,
-                color = AppColors.Primary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            // 사업소명과 날씨를 한 줄에 둔다(사용자 요청). 날씨는 '정보'지 '동작'이 아니라
+            // 오른쪽 버튼 무리(설정·관리자)에 섞이면 성격이 잘못 읽힌다.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // maxLines 없이 두면 폭이 모자랄 때 제목이 세 줄까지 늘어나 헤더가 화면을 먹는다.
+                // 좁은 화면에서 자리가 부족하면 날씨 칩이 아니라 제목이 먼저 줄어야 하므로
+                // weight(fill = false) — 제 폭만 쓰되 모자라면 양보한다.
+                Text(
+                    "신정승무사업소",
+                    fontSize = if (narrow) hsp(16.0) else hsp(17.5),
+                    // 줄높이를 글자 크기에 붙여 둔다. 기본값은 글꼴이 위아래로 여백을 크게 잡아
+                    // 두 줄 묶음이 아래로 처져 보이고, 옆의 마스코트와 높낮이가 어긋난다.
+                    lineHeight = if (narrow) hsp(18.0) else hsp(19.5),
+                    fontWeight = FontWeight.ExtraBold,
+                    color = AppColors.Primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Spacer(Modifier.width(6.dp))
+                // 날씨 칩 — 이모지 + 기온. 특보가 있으면 주황 테두리에 점 하나를 붙인다
+                // (예전처럼 뱃지를 한 줄 더 얹으면 헤더 높이가 밀려 줄이 어긋난다).
+                Box {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = AppColors.Surface,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (warnActive) Color(0xFFFF8A3D) else AppColors.Divider
+                        ),
+                        modifier = Modifier.clickable { showWeatherDialog = true }
+                    ) {
+                        Text(
+                            (weather?.emoji ?: "⛅") + (weather?.tempC?.let { " $it°" } ?: ""),
+                            fontSize = if (narrow) hsp(10.5) else hsp(11.5),
+                            color = AppColors.TextPrimary,
+                            maxLines = 1,
+                            modifier = Modifier.padding(
+                                horizontal = if (narrow) 6.dp else 7.dp,
+                                vertical = 2.dp
+                            )
+                        )
+                    }
+                    if (warnActive) {
+                        Box(
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFF6B00))
+                                .border(1.5.dp, AppColors.Background, CircleShape)
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
-                        .size(7.dp)
+                        .size(6.dp)
                         .clip(CircleShape)
                         .background(AppColors.OnlineGreen)
                 )
@@ -412,8 +423,8 @@ private fun HeaderBar(
                     } else {
                         if (isAdmin) "관리자님 (관리자 모드)" else "실시간 안전정보 공유중"
                     },
-                    fontSize = if (narrow) hsp(10.0) else hsp(11.0),
-                    lineHeight = if (narrow) hsp(12.0) else hsp(13.0),
+                    fontSize = if (narrow) hsp(9.5) else hsp(10.0),
+                    lineHeight = if (narrow) hsp(11.0) else hsp(11.5),
                     color = AppColors.TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

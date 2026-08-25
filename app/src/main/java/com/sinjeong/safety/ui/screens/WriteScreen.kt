@@ -178,6 +178,10 @@ fun WriteScreen(
             Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // 키보드가 뜨면 스크롤 영역을 그만큼 줄인다(스크롤보다 앞에 와야 한다).
+                // 줄여 놔야 포커스 간 입력칸이 화면 안으로 자동 스크롤된다 — 안 줄이면
+                // 스크롤 영역이 키보드 뒤까지 이어져 아래쪽 칸(링크 URL 등)이 가려진다.
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp)
         ) {

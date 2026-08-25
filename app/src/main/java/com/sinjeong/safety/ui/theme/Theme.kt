@@ -85,10 +85,13 @@ fun SinjeongSafetyTheme(content: @Composable () -> Unit) {
     val context = LocalContext.current
 
     // 저장된 선택을 앱 시작 시 한 번만 읽어 온다.
+    // 기본값은 1(라이트)이다. 0(시스템 따름)으로 두면 기기가 다크로 설정된 사람은
+    // 앱을 처음 켰을 때 다크 화면을 보게 되는데, 이 앱의 첫인상은 밝은 화면이어야 한다는
+    // 사용자 요청이 있었다. 다크를 쓰려면 설정에서 직접 고른다.
     remember {
         AppColors.mode = context
             .getSharedPreferences("safety_prefs", Context.MODE_PRIVATE)
-            .getInt("dark_mode", 0)
+            .getInt("dark_mode", 1)
     }
 
     val sysDark = isSystemInDarkTheme()

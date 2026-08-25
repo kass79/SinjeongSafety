@@ -18,8 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Print
-import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -61,6 +60,7 @@ fun ConfirmStatusScreen(vm: MainViewModel, postId: String, onBack: () -> Unit) {
     LaunchedEffect(postId) { vm.loadConfirmReport(postId) { report = it } }
 
     var showPending by remember { mutableStateOf(false) }
+    var showExport by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
@@ -89,27 +89,32 @@ fun ConfirmStatusScreen(vm: MainViewModel, postId: String, onBack: () -> Unit) {
                 Spacer(Modifier.weight(1f))
 
                 // 명단을 다 받아 오기 전에는 회색으로 두고 눌러도 아무 일 없게 한다.
+                // 아이콘 하나로 모으고 형식은 대화상자에서 고른다 — 상단바에 아이콘이 늘어나면 뭐가 뭔지 모른다.
                 val ready = report
                 Icon(
-                    Icons.Outlined.Share,
-                    contentDescription = "엑셀로 내보내기",
+                    Icons.Outlined.FileUpload,
+                    contentDescription = "내보내기",
                     tint = if (ready == null) AppColors.TextHint else AppColors.Primary,
                     modifier = Modifier
                         .size(26.dp)
-                        .clickable(enabled = ready != null) {
-                            if (ready != null) shareConfirmCsv(context, title.orEmpty(), ready)
-                        }
+                        .clickable(enabled = ready != null) { showExport = true }
                 )
-                Spacer(Modifier.width(16.dp))
-                Icon(
-                    Icons.Outlined.Print,
-                    contentDescription = "인쇄 / PDF 저장",
-                    tint = if (ready == null) AppColors.TextHint else AppColors.Primary,
-                    modifier = Modifier
-                        .size(26.dp)
-                        .clickable(enabled = ready != null) {
-                            if (ready != null) printConfirmRoster(context, title.orEmpty(), ready)
+            }
+
+            if (showExport) report?.let { ready ->
+                ExportPickerDialog(
+                    options = listOf(
+                        ExportOption("서명부 인쇄 / PDF", "종이 서명부 모양 그대로. 날인 칸에 확인 표시가 찍힌다") {
+                            printConfirmRoster(context, title.orEmpty(), ready)
+                        },
+                        ExportOption("텍스트 파일 (.txt)", "그냥 읽는 명단. 카톡에 붙여넣어도 된다") {
+                            shareConfirmText(context, title.orEmpty(), ready)
+                        },
+                        ExportOption("엑셀용 CSV", "엑셀에서 열어 따로 집계할 때") {
+                            shareConfirmCsv(context, title.orEmpty(), ready)
                         }
+                    ),
+                    onDismiss = { showExport = false }
                 )
             }
 

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -80,7 +81,11 @@ fun QuestionDetailScreen(
     LaunchedEffect(questionId) { vm.viewQuestion(questionId) }
 
     Surface(color = AppColors.Background, modifier = Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
+        // 키보드가 뜨면 이 화면 전체를 그만큼 줄인다. 안 줄이면 맨 아래 답변 입력줄이
+        // 키보드에 그대로 덮인다 — targetSdk 35+ 의 edge-to-edge 강제로 매니페스트
+        // adjustResize 가 더는 창을 줄여 주지 않기 때문이다.
+        // 가운데 목록이 weight(1f) 라 줄어든 만큼을 목록이 흡수하고 입력줄은 키보드 위에 남는다.
+        Column(Modifier.fillMaxSize().imePadding()) {
 
             // ── 상단 바 ──────────────────────────────────────
             Row(

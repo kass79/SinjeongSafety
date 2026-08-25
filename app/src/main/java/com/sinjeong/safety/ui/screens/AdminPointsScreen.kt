@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -34,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -55,6 +57,9 @@ fun AdminPointsScreen(onBack: () -> Unit) {
     val repo = remember { PointsRepository() }
     var month by remember { mutableStateOf(YearMonth.now()) }
     var rows by remember { mutableStateOf<List<CrewPoints>?>(null) }
+    var showExport by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
 
     // 달을 바꿀 때마다 다시 센다. 실시간으로 볼 화면이 아니라 한 번씩만 읽는다.
     LaunchedEffect(month) {
@@ -87,6 +92,36 @@ fun AdminPointsScreen(onBack: () -> Unit) {
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = AppColors.TextPrimary
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                // 다 세기 전에는 회색으로 두고 눌러도 아무 일 없게 한다(확인 현황 화면과 같은 규칙).
+                val ready = rows
+                Icon(
+                    Icons.Outlined.FileUpload,
+                    contentDescription = "내보내기",
+                    tint = if (ready.isNullOrEmpty()) AppColors.TextHint else AppColors.Primary,
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clickable(enabled = !ready.isNullOrEmpty()) { showExport = true }
+                )
+            }
+
+            if (showExport) rows?.takeIf { it.isNotEmpty() }?.let { ready ->
+                ExportPickerDialog(
+                    options = listOf(
+                        ExportOption("인쇄 / PDF", "순위표를 그대로 종이에") {
+                            printPoints(context, month, ready)
+                        },
+                        ExportOption("텍스트 파일 (.txt)", "그냥 읽는 순위표. 카톡에 붙여넣어도 된다") {
+                            sharePointsText(context, month, ready)
+                        },
+                        ExportOption("엑셀용 CSV", "엑셀에서 열어 따로 집계할 때") {
+                            sharePointsCsv(context, month, ready)
+                        }
+                    ),
+                    onDismiss = { showExport = false }
                 )
             }
 

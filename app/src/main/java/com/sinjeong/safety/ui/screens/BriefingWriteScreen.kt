@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -141,6 +142,8 @@ fun BriefingWriteScreen(vm: MainViewModel, onBack: () -> Unit) {
             Column(
                 Modifier
                     .fillMaxSize()
+                    // 키보드가 뜬 만큼 스크롤 영역을 줄인다(스크롤보다 앞에 와야 한다).
+                    .imePadding()
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp)
             ) {
