@@ -372,35 +372,52 @@ private fun HeaderBar(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
-                Spacer(Modifier.width(6.dp))
-                // 날씨 칩 — 이모지 + 기온. 특보가 있으면 주황 테두리에 점 하나를 붙인다
-                // (예전처럼 뱃지를 한 줄 더 얹으면 헤더 높이가 밀려 줄이 어긋난다).
+                Spacer(Modifier.width(7.dp))
+                // 날씨 타일 — 맨 왼쪽 마스코트와 **같은 크기·같은 모서리**로 맞춘다(사용자 요청).
+                // 헤더에 놓인 네모 타일이 둘뿐이라 크기가 어긋나면 바로 눈에 띈다.
+                // 이모지 위 / 기온 아래로 쌓아 40dp 안에 둘 다 넣는다.
+                // 특보는 주황 테두리 + 점 하나로만 알린다(뱃지를 한 줄 더 얹으면 헤더 높이가 밀린다).
                 Box {
                     Surface(
-                        shape = RoundedCornerShape(50),
+                        shape = RoundedCornerShape(15.dp),
                         color = AppColors.Surface,
                         border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
+                            if (warnActive) 1.5.dp else 1.dp,
                             if (warnActive) Color(0xFFFF8A3D) else AppColors.Divider
                         ),
-                        modifier = Modifier.clickable { showWeatherDialog = true }
+                        modifier = Modifier
+                            .size(if (narrow) 36.dp else 40.dp)
+                            .clickable { showWeatherDialog = true }
                     ) {
-                        Text(
-                            (weather?.emoji ?: "⛅") + (weather?.tempC?.let { " $it°" } ?: ""),
-                            fontSize = if (narrow) hsp(10.5) else hsp(11.5),
-                            color = AppColors.TextPrimary,
-                            maxLines = 1,
-                            modifier = Modifier.padding(
-                                horizontal = if (narrow) 6.dp else 7.dp,
-                                vertical = 2.dp
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Text(
+                                weather?.emoji ?: "⛅",
+                                fontSize = if (narrow) hsp(13.0) else hsp(15.0),
+                                lineHeight = if (narrow) hsp(15.0) else hsp(17.0),
+                                maxLines = 1
                             )
-                        )
+                            // 기온을 아직 못 받았으면 이모지만 가운데 둔다(빈 줄을 남기지 않는다).
+                            weather?.tempC?.let {
+                                Text(
+                                    "$it°",
+                                    fontSize = if (narrow) hsp(9.0) else hsp(10.0),
+                                    lineHeight = if (narrow) hsp(10.0) else hsp(11.0),
+                                    fontWeight = FontWeight.Bold,
+                                    color = AppColors.TextSecondary,
+                                    maxLines = 1
+                                )
+                            }
+                        }
                     }
                     if (warnActive) {
                         Box(
                             Modifier
                                 .align(Alignment.TopEnd)
-                                .size(8.dp)
+                                .size(9.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFFFF6B00))
                                 .border(1.5.dp, AppColors.Background, CircleShape)
