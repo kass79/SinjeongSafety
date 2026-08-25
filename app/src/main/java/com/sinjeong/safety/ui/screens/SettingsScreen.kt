@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.EmojiEvents
+import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.Notifications
@@ -68,7 +69,12 @@ import com.sinjeong.safety.ui.theme.AppColors
  * 헤더 ⚙️ 아이콘으로 들어온다. 로그인하지 않은 상태에서도 열 수 있다.
  */
 @Composable
-fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenPoints: () -> Unit = {}) {
+fun SettingsScreen(
+    vm: MainViewModel,
+    onBack: () -> Unit,
+    onOpenPoints: () -> Unit = {},
+    onOpenRoster: () -> Unit = {}
+) {
 
     val context = LocalContext.current
     val crewName by vm.crewName.collectAsState()
@@ -216,32 +222,63 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit, onOpenPoints: () -> Un
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable(onClick = onOpenPoints)
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Outlined.EmojiEvents,
-                                contentDescription = null,
-                                tint = AppColors.Primary,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    "직원 포인트 현황",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = AppColors.TextPrimary
+                        Column {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable(onClick = onOpenPoints)
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Outlined.EmojiEvents,
+                                    contentDescription = null,
+                                    tint = AppColors.Primary,
+                                    modifier = Modifier.size(22.dp)
                                 )
-                                Text(
-                                    "확인·퀴즈·댓글·답변을 월별로 집계합니다",
-                                    fontSize = 12.5.sp,
-                                    color = AppColors.TextSecondary
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        "직원 포인트 현황",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AppColors.TextPrimary
+                                    )
+                                    Text(
+                                        "확인·퀴즈·댓글·답변을 월별로 집계합니다",
+                                        fontSize = 12.5.sp,
+                                        color = AppColors.TextSecondary
+                                    )
+                                }
+                            }
+
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable(onClick = onOpenRoster)
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Groups,
+                                    contentDescription = null,
+                                    tint = AppColors.Primary,
+                                    modifier = Modifier.size(22.dp)
                                 )
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        "직원 명단 관리",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AppColors.TextPrimary
+                                    )
+                                    Text(
+                                        "신입사원 등록·퇴직 처리를 앱에서 합니다",
+                                        fontSize = 12.5.sp,
+                                        color = AppColors.TextSecondary
+                                    )
+                                }
                             }
                         }
                     }

@@ -412,6 +412,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 crewRepo.signIn(empNo, pin)
+
+                // 퇴직 처리된 사번은 로그인 직후 되돌린다.
+                // 판단 근거는 removedIds 에 **명시적으로 들어 있는지** 하나뿐이다.
+                // "명단에 없으면 차단"으로 만들면 안 된다 — 터널 등으로 config/roster 를 못 읽으면
+                // 신입사원(extraIds 에만 있는 사람)이 통째로 갇힌다. 그래서 조회 실패(null)는 통과시킨다.
+                if (crewRepo.removedIds()?.contains(empNo.trim()) == true) {
+                    crewRepo.signOut()
+                    _message.value = UiMessage("퇴직 처리된 사번입니다. 관리자에게 문의하세요", true)
+                    return@launch
+                }
+
                 _crewEmpNo.value = empNo.trim()
                 val n = crewRepo.savedName(empNo)
                 if (n != null) {

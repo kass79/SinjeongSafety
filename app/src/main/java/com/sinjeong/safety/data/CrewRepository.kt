@@ -1,9 +1,11 @@
 package com.sinjeong.safety.data
 
 import android.content.Context
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -63,6 +65,83 @@ class CrewRepository {
 
     suspend fun isInRoster(context: Context, empNo: String): Boolean =
         effectiveRoster(context).contains(empNo.trim())
+
+    // ── 명단 관리 (관리자 전용) ──────────────────────────────────
+    // config/roster       : { extraIds: [...], removedIds: [...] }   인사이동 델타
+    // config/rosterNames  : { names: { 사번: 이름 } }                 전 직원 실명
+    // 두 문서 모두 없을 수 있으므로 쓰기는 전부 set + merge 로 한다.
+    private val rosterDoc get() = db.collection("config").document("roster")
+    private val namesDoc get() = db.collection("config").document("rosterNames")
+
+    /**
+     * 사번 → 이름. 규칙상 관리자만 읽을 수 있다(전 직원 실명이라 일반 공개 금지).
+     * 실명은 저장소·APK 어디에도 두지 않는다 — Firestore 에만 있다.
+     */
+    @Suppress("UNCHECKED_CAST")
+    suspend fun rosterNames(): Map<String, String> = try {
+        val names = namesDoc.get().await().get("names") as? Map<String, Any?>
+        names.orEmpty()
+            .mapNotNull { (k, v) -> v?.toString()?.takeIf { it.isNotBlank() }?.let { k to it } }
+            .toMap()
+    } catch (e: Exception) {
+        Log.e("CrewRepository", "config/rosterNames 조회 실패", e)
+        emptyMap()
+    }
+
+    /**
+     * 퇴직 처리된 사번 목록. **조회에 실패하면 null 을 돌려준다.**
+     * 부르는 쪽(로그인 차단)은 null 이면 막지 않아야 한다. 이 앱은 터널을 대비한 오프라인
+     * 동작이 설계 원칙이라, config/roster 를 못 읽는 상황이 정상적으로 생긴다.
+     * 그때 "명단에 없으면 차단"으로 만들면 extraIds 에만 있는 신입사원이 통째로 갇힌다.
+     */
+    suspend fun removedIds(): Set<String>? = runCatching {
+        (rosterDoc.get().await().get("removedIds") as? List<*>)
+            ?.mapNotNull { it?.toString()?.trim() }?.toSet() ?: emptySet()
+    }.getOrNull()
+
+    /**
+     * 신입사원 등록. 이미 명단에 있으면 아무것도 하지 않고 false 를 돌려준다.
+     *
+     * 이름은 점 표기가 아니라 중첩 맵으로 넣는다. update() 와 달리 set() 에
+     * "names.12345678" 을 넘기면 점이 들어간 **필드 이름 하나**가 새로 생겨 버린다.
+     * merge 는 중첩 맵을 깊게 합치므로 기존 282명은 그대로 남는다.
+     */
+    suspend fun addCrew(context: Context, empNo: String, name: String): Boolean {
+        val no = empNo.trim()
+        if (isInRoster(context, no)) return false
+        rosterDoc.set(
+            mapOf(
+                "extraIds" to FieldValue.arrayUnion(no),
+                // 재입사·오처리 정정: 퇴직 목록에 남아 있으면 빼준다
+                "removedIds" to FieldValue.arrayRemove(no)
+            ),
+            SetOptions.merge()
+        ).await()
+        namesDoc.set(mapOf("names" to mapOf(no to name.trim())), SetOptions.merge()).await()
+        return true
+    }
+
+    /**
+     * 퇴직 처리.
+     * - 이름은 rosterNames 에서 **지우지 않는다.** 과거 확인 기록·포인트 집계가 그 이름을 쓴다.
+     * - extraIds 도 건드리지 않는다. effectiveRoster 가 (기본 + extra) - removed 라
+     *   removedIds 한 줄이면 충분하고, 여기서 extraIds 까지 지우면 나중에 복귀시킬 때
+     *   기본 명단에 없는 신입사원이 명단에서 영영 사라진다.
+     */
+    suspend fun retireCrew(empNo: String) {
+        rosterDoc.set(
+            mapOf("removedIds" to FieldValue.arrayUnion(empNo.trim())),
+            SetOptions.merge()
+        ).await()
+    }
+
+    /** 퇴직 취소(복귀) */
+    suspend fun unretireCrew(empNo: String) {
+        rosterDoc.set(
+            mapOf("removedIds" to FieldValue.arrayRemove(empNo.trim())),
+            SetOptions.merge()
+        ).await()
+    }
 
     /**
      * 사번 → 이름. 등록하면서 이름을 남긴 사람만 들어 있다.

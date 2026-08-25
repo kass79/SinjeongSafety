@@ -144,10 +144,16 @@ service cloud.firestore {
       allow read: if true;
     }
 
-    // 로그인 강제 스위치. 앱은 읽기만 하고, 값 변경은 콘솔에서 한다.
+    // 앱 설정 문서들. 기본은 읽기 전용이고 값 변경은 콘솔에서 한다.
+    // 다만 명단 두 문서만은 관리자가 앱 안에서 고칠 수 있어야 한다
+    // (신입 등록·퇴직 처리를 하려고 매번 Firebase 콘솔에 들어갈 수는 없다).
+    //   roster      : { extraIds, removedIds }  인사이동 델타
+    //   rosterNames : { names: { 사번: 이름 } }  전 직원 실명 — 읽기도 관리자만
+    // 나머지(auth 의 로그인 강제 스위치 등)는 잘못 건드리면 앱이 통째로 안 열리므로
+    // 계속 콘솔 전용으로 잠가 둔다.
     match /config/{docId} {
       allow read: if docId != 'rosterNames' || isAdmin();
-      allow write: if false;
+      allow write: if isAdmin() && (docId == 'roster' || docId == 'rosterNames');
     }
   }
 }

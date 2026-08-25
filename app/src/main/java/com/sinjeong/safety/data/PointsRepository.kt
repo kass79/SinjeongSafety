@@ -83,7 +83,8 @@ class PointsRepository {
         }
 
         // 이름표는 config/rosterNames 를 우선하고, 없으면 기록에 남은 이름으로 채운다.
-        val roster = rosterNames()
+        // 그 문서는 CrewRepository 가 명단 관리에 쓰면서 같이 들고 있으니 거기서 읽는다.
+        val roster = CrewRepository().rosterNames()
 
         return (confirms.keys + comments.keys + answers.keys)
             .map { empNo ->
@@ -113,18 +114,5 @@ class PointsRepository {
     } catch (e: Exception) {
         Log.e("PointsRepository", "$group 조회 실패 — 컬렉션 그룹 색인($field)이 없을 수 있음", e)
         emptyList()
-    }
-
-    /** config/rosterNames : { "names": { 사번 → 이름 } }. 관리자만 읽을 수 있고, 아직 비어 있을 수 있다. */
-    @Suppress("UNCHECKED_CAST")
-    private suspend fun rosterNames(): Map<String, String> = try {
-        val names = db.collection("config").document("rosterNames").get().await()
-            .get("names") as? Map<String, Any?>
-        names.orEmpty()
-            .mapNotNull { (k, v) -> v?.toString()?.takeIf { it.isNotBlank() }?.let { k to it } }
-            .toMap()
-    } catch (e: Exception) {
-        Log.e("PointsRepository", "config/rosterNames 조회 실패", e)
-        emptyMap()
     }
 }
