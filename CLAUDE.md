@@ -73,6 +73,19 @@ anthropic-skills:sinjeong-safety-app 스킬에는 "사용자가 GitHub 웹에서
   이렇게 잘못 전달한 적이 있습니다. 전달용은 항상
   `gh run download <runId> -n sinjeong-safety-debug-apk`. 로컬 빌드는 컴파일 검증 전용.
 
+- **피드(HomeScreen)는 밴드식이다(v1.12.0).** 본문 6줄+더보기, 사진·영상 포스터·PDF 첫 쪽 인라인,
+  **영상은 눌러서 재생**(자동재생 금지 — 데이터·배터리·스크롤이 다 나빠진다).
+  함정 셋: ① 펼침·재생 상태는 목록 **바깥**에서 글 id 로 들 것. 카드 안 `remember` 는 LazyColumn 이
+  재활용할 때 엉뚱한 카드에 얹힌다. ② 화면 밖 이탈 시 반드시 release — 안 하면 소리만 계속 난다
+  (`adb shell dumpsys audio | grep -i player` 로 셀 것. 재생 전 0 → 중 1 → 이탈 후 0 이어야 한다).
+  ③ **재생 완료 시 "퀴즈 풀고 확인" 버튼을 띄울 것.** 확인·퀴즈가 상세에만 있어 피드에서만 보면
+  확인 기록이 안 남고 확인 현황·포인트·서명부가 통째로 빈다. 전체화면은 피드에 넣지 않았다.
+- **관리 메뉴 제한(직원 포인트·명단 관리)은 `crewEmpNo` 로 판정하면 안 된다.**
+  `CrewRepository.currentEmpNo()` 는 관리자 세션이면 **무조건 null** 을 돌려주므로, 관리자 모드로 들어간
+  본인 화면에서 메뉴가 사라진다(같은 실행 중엔 옛 값이 남아 "어제는 되고 오늘은 안 되는" 형태로 나온다).
+  승무원 인증 성공 시점의 사번을 prefs `crew_emp_no` 에 남기고 그걸로 판정한다
+  (`CrewRepository.DEV_EMP_NOS`, 사번만 — 실명은 코드에 두지 않는다). 화면 차원의 제한이며
+  `firestore.rules` 는 그대로다(규칙까지 좁히면 관리자 계정이 확인 현황·명단을 못 읽어 깨진다).
 - **첨부(Attachment)에 필드를 추가하면 여섯 곳을 같이 고칠 것.** 손으로 직렬화하는 구조라 하나만
   빠뜨려도 저장은 되는데 다시 읽을 때 사라진다(예전에 `links` 가 실제로 그렇게 사라졌다):
   `PostRepository.addPost` / `updatePost` / `updatePost` 의 `keep` 집합 / `attachmentUrlsOf` /
