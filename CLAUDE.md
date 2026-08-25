@@ -73,6 +73,14 @@ anthropic-skills:sinjeong-safety-app 스킬에는 "사용자가 GitHub 웹에서
   이렇게 잘못 전달한 적이 있습니다. 전달용은 항상
   `gh run download <runId> -n sinjeong-safety-debug-apk`. 로컬 빌드는 컴파일 검증 전용.
 
+- **입력창을 새로 만들면 반드시 `Modifier.imePadding()` 을 붙일 것.** 매니페스트의
+  `windowSoftInputMode="adjustResize"` 는 **더 이상 동작하지 않는다** — targetSdk 35+ 부터 안드로이드가
+  edge-to-edge 를 강제하고 36 에선 opt-out 도 없어서, 창이 키보드만큼 줄지 않고 IME 는 앱이 직접
+  소비해야 하는 인셋으로만 온다. 안 붙이면 입력창이 키보드에 통째로 덮여 "쓰는 내용이 안 보인다"가 된다
+  (2026-08-25 실제 신고, 댓글창). 붙이는 위치: 하단 고정 바는 `background` **뒤**에 `.imePadding()`
+  (키보드 위 여백까지 같은 색), 스크롤 화면은 `verticalScroll` **앞**에. 목록 화면은 LazyColumn 에.
+  창 단위 설정(`decorFitsSystemWindows`)으로 한 번에 고치려 들지 말 것 — 이미 imePadding 을 가진
+  화면들과 이중 패딩이 나고 Scaffold 상단 여백 규칙까지 흔든다.
 - **윈도우 중복 다운로드 파일명(`이름 (2).kt`)이 커밋되면 Redeclaration으로 빌드 전체가 깨집니다.**
   한 번 사고 났었음(그때 (2) 쪽이 최신본인 경우도 있었으니 지우기 전에 diff 확인).
 - 채널·상단바: MainActivity Scaffold가 상태표시줄 여백을 이미 넣으므로 개별 화면에서 중복 padding 금지.
