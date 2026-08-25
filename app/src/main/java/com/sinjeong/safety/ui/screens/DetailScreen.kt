@@ -951,7 +951,10 @@ private fun VideoPlayer(video: Attachment) {
         DisposableEffect(Unit) {
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             onDispose {
-                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                // UNSPECIFIED 로 되돌리면 앱 전체가 자동회전을 따라가 버린다(매니페스트 세로
+                // 고정이 런타임 요청에 덮인 상태로 남는다). 영상을 한 번 본 뒤로 앱이 계속
+                // 가로로 돌아가던 원인이라 명시적으로 세로로 되돌린다.
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             }
         }
         // 회전이 configChanges 로 처리되면서(액티비티 재시작 없음) 다이얼로그 창이

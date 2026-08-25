@@ -32,9 +32,17 @@
           (폴드 접은 화면에서 전체화면 오류로 실측). Compose는 재시작 없이도
           Configuration 변화를 스스로 반영하므로 잃는 것이 없다.
         -->
+        <!--
+          screenOrientation: 세로 고정. 이게 없으면 자동회전이 켜진 기기에서 앱이 가로로
+          돌아가는데, 폴드 접은 커버 화면(약 344dp)에서는 가로가 사실상 못 쓸 화면이 된다.
+          현장에서 한 손으로 보는 앱이라 세로가 유일하게 맞는 방향이다.
+          동영상 전체화면만 코드에서 잠깐 가로를 요청하고(requestedOrientation),
+          닫을 때 다시 세로로 되돌린다 — 런타임 요청이 이 선언을 덮는다.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.SinjeongSafety">

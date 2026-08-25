@@ -346,11 +346,15 @@ private fun HeaderBar(
             Text(
                 "신정승무사업소",
                 fontSize = if (narrow) hsp(15.0) else hsp(16.0),
+                // 줄높이를 글자 크기에 붙여 둔다. 기본값은 글꼴이 위아래로 여백을 크게 잡아
+                // 두 줄 묶음이 아래로 처져 보이고, 옆의 마스코트와 높낮이가 어긋난다.
+                lineHeight = if (narrow) hsp(17.0) else hsp(18.0),
                 fontWeight = FontWeight.ExtraBold,
                 color = AppColors.Primary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
@@ -366,62 +370,52 @@ private fun HeaderBar(
                         if (isAdmin) "관리자님 (관리자 모드)" else "실시간 안전정보 공유중"
                     },
                     fontSize = if (narrow) hsp(10.0) else hsp(11.0),
+                    lineHeight = if (narrow) hsp(12.0) else hsp(13.0),
                     color = AppColors.TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
         }
-        // 날씨 칩 — 다음(daum) 날씨 위젯처럼 아이콘+기온만 작게.
-        // 특보가 있으면 그 위에 작은 주황 뱃지가 한 줄 붙는다(맥박 애니메이션은 뺐다.
-        // 칩이 작아지고 뱃지가 눈에 띄므로 움직임까지 얹을 값어치가 없다).
+        // 오른쪽 버튼 3개(날씨·설정·관리자)는 모양·크기를 완전히 똑같이 맞춘다.
+        // 예전에는 날씨만 알약 칩이었고 특보 뱃지가 그 위에 한 줄 더 붙어서,
+        // 혼자 크기가 다른 데다 헤더 높이까지 밀어 올려 줄이 어긋나 보였다.
+        // 기온 숫자는 뺐다 — 눌러서 뜨는 다이얼로그가 기온·특보 전문을 다 보여주므로
+        // 헤더에서는 "지금 날씨가 어떤지" 이모지 하나면 충분하다.
+        val btnSize = if (narrow) 34.dp else 38.dp
+        val glyphSize = if (narrow) 18.dp else 21.dp
+
         var showWeatherDialog by remember { mutableStateOf(false) }
         val warning = weather?.warning
         val warnActive = warning != null
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable { showWeatherDialog = true }
-        ) {
-            if (warning != null) {
-                // 저장소가 특보 여러 건을 " · " 로 이어 붙여 준다.
-                // 뱃지는 "특보가 있다"는 신호 역할만 하므로 첫 건 + "+N" 으로 줄이고,
-                // 전문(전체 목록)은 칩을 눌렀을 때 뜨는 다이얼로그가 그대로 보여준다.
-                val warns = warning.split(" · ").filter { it.isNotBlank() }
-                val badgeText =
-                    if (warns.size > 1) warns[0] + " +" + (warns.size - 1)
-                    else warning
-                Text(
-                    badgeText,
-                    fontSize = hsp(9.0),
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF8A3D00),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        // 첫 항목 하나 + "+N" 이라 폭이 예측 가능하다 → widthIn 제한 없음.
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFFFFF1E6))
-                        .padding(horizontal = 5.dp, vertical = 1.dp)
-                )
-                Spacer(Modifier.height(2.dp))
-            }
+
+        Box {
             Surface(
-                shape = RoundedCornerShape(50),
+                shape = CircleShape,
                 color = AppColors.Surface,
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     if (warnActive) Color(0xFFFF8A3D) else AppColors.Divider
-                )
+                ),
+                modifier = Modifier.size(btnSize).clickable { showWeatherDialog = true }
             ) {
-                Text(
-                    // 기온을 못 받았으면 이모지만
-                    (weather?.emoji ?: "⛅") + (weather?.tempC?.let { " $it°" } ?: ""),
-                    fontSize = if (narrow) hsp(11.0) else hsp(12.0),
-                    maxLines = 1,
-                    modifier = Modifier.padding(
-                        horizontal = if (narrow) 6.dp else 8.dp,
-                        vertical = if (narrow) 3.dp else 4.dp
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        weather?.emoji ?: "⛅",
+                        fontSize = if (narrow) hsp(15.0) else hsp(17.0),
+                        maxLines = 1
                     )
+                }
+            }
+            // 특보는 점 하나로만 알린다. 전문은 눌러서 본다.
+            if (warnActive) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFF6B00))
+                        .border(1.5.dp, AppColors.Background, CircleShape)
                 )
             }
         }
@@ -460,14 +454,14 @@ private fun HeaderBar(
             shape = CircleShape,
             color = AppColors.Surface,
             border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
-            modifier = Modifier.size(if (narrow) 34.dp else 38.dp).clickable(onClick = onSettingsClick)
+            modifier = Modifier.size(btnSize).clickable(onClick = onSettingsClick)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     Icons.Outlined.Settings,
                     contentDescription = "설정",
                     tint = AppColors.Primary,
-                    modifier = Modifier.size(if (narrow) 18.dp else 21.dp)
+                    modifier = Modifier.size(glyphSize)
                 )
             }
         }
@@ -478,14 +472,14 @@ private fun HeaderBar(
             shape = CircleShape,
             color = if (isAdmin) AppColors.Primary else AppColors.Surface,
             border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
-            modifier = Modifier.size(if (narrow) 34.dp else 38.dp).clickable(onClick = onShieldClick)
+            modifier = Modifier.size(btnSize).clickable(onClick = onShieldClick)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     if (isAdmin) Icons.Outlined.Logout else Icons.Outlined.AdminPanelSettings,
                     contentDescription = "관리자",
                     tint = if (isAdmin) Color.White else AppColors.Primary,
-                    modifier = Modifier.size(if (narrow) 18.dp else 21.dp)
+                    modifier = Modifier.size(glyphSize)
                 )
             }
         }
