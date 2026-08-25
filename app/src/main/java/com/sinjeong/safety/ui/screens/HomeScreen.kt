@@ -328,6 +328,49 @@ private fun HeaderBar(
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // 버튼 3종의 크기 규격. 날씨는 왼쪽 정보 영역에, 설정·관리자는 오른쪽에 두지만
+        // 크기는 셋 다 똑같이 간다.
+        val btnSize = if (narrow) 34.dp else 38.dp
+        val glyphSize = if (narrow) 18.dp else 21.dp
+
+        var showWeatherDialog by remember { mutableStateOf(false) }
+        val warning = weather?.warning
+        val warnActive = warning != null
+
+        // 날씨는 '정보'지 '동작'이 아니다. 오른쪽 버튼 무리에 섞여 있으면 설정·관리자와
+        // 같은 성격으로 읽히므로, 신정승무캘린더처럼 왼쪽 정보 영역으로 옮겼다(사용자 요청).
+        Box {
+            Surface(
+                shape = CircleShape,
+                color = AppColors.Surface,
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (warnActive) Color(0xFFFF8A3D) else AppColors.Divider
+                ),
+                modifier = Modifier.size(btnSize).clickable { showWeatherDialog = true }
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        weather?.emoji ?: "⛅",
+                        fontSize = if (narrow) hsp(15.0) else hsp(17.0),
+                        maxLines = 1
+                    )
+                }
+            }
+            // 특보는 점 하나로만 알린다. 전문은 눌러서 본다.
+            if (warnActive) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFF6B00))
+                        .border(1.5.dp, AppColors.Background, CircleShape)
+                )
+            }
+        }
+        Spacer(Modifier.width(iconGap))
+
         Image(
             painter = painterResource(R.drawable.mascot_hello),
             contentDescription = "마스코트",
@@ -377,50 +420,6 @@ private fun HeaderBar(
                 )
             }
         }
-        // 오른쪽 버튼 3개(날씨·설정·관리자)는 모양·크기를 완전히 똑같이 맞춘다.
-        // 예전에는 날씨만 알약 칩이었고 특보 뱃지가 그 위에 한 줄 더 붙어서,
-        // 혼자 크기가 다른 데다 헤더 높이까지 밀어 올려 줄이 어긋나 보였다.
-        // 기온 숫자는 뺐다 — 눌러서 뜨는 다이얼로그가 기온·특보 전문을 다 보여주므로
-        // 헤더에서는 "지금 날씨가 어떤지" 이모지 하나면 충분하다.
-        val btnSize = if (narrow) 34.dp else 38.dp
-        val glyphSize = if (narrow) 18.dp else 21.dp
-
-        var showWeatherDialog by remember { mutableStateOf(false) }
-        val warning = weather?.warning
-        val warnActive = warning != null
-
-        Box {
-            Surface(
-                shape = CircleShape,
-                color = AppColors.Surface,
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    if (warnActive) Color(0xFFFF8A3D) else AppColors.Divider
-                ),
-                modifier = Modifier.size(btnSize).clickable { showWeatherDialog = true }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        weather?.emoji ?: "⛅",
-                        fontSize = if (narrow) hsp(15.0) else hsp(17.0),
-                        maxLines = 1
-                    )
-                }
-            }
-            // 특보는 점 하나로만 알린다. 전문은 눌러서 본다.
-            if (warnActive) {
-                Box(
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFFF6B00))
-                        .border(1.5.dp, AppColors.Background, CircleShape)
-                )
-            }
-        }
-        Spacer(Modifier.width(iconGap))
-
         if (showWeatherDialog) {
             AlertDialog(
                 onDismissRequest = { showWeatherDialog = false },
