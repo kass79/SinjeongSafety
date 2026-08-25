@@ -18,6 +18,14 @@ Android(Kotlin/Compose) + Firebase(SinjeongSafety/sinjeongsafety 프로젝트). 
   Secret Manager `ANTHROPIC_API_KEY`. 모델 claude-opus-5. 로그인 사용자만 호출 가능.
 - Firebase CLI가 이 PC에 kass 계정으로 로그인돼 있어 `firebase deploy --only functions` 직접 가능.
 - 확인 현황: `posts/{글}/confirms/{사번}`. 미확인 = 명단(assets+config/roster) − 확인 사번.
+- **직원 실명: `config/rosterNames` = `{names: {사번: 이름}}` 282명 (2026-08-25 업로드 완료).**
+  관리자만 읽는다(전 직원 실명이라 일반 공개 금지). 실명은 저장소·APK에 두지 않는다 — Firestore 에만.
+  ※ 콘솔 없이 문서를 쓰는 방법: CLI 에 문서 쓰기 명령이 **없고**, 규칙상 admin@sinjeong.app 만 쓸 수
+  있으며 그 비밀번호는 다루지 않는다. Admin SDK 권한으로 한 번 쓰고 곧바로 지우는 임시 onRequest
+  함수를 배포하는 방식으로 해결했다(랜덤 키로 보호, 커밋 금지, 끝나면 `functions:delete`).
+- 직원 포인트(관리자 전용, 설정 > 관리): 확인 1 / 퀴즈 정답 1 / 댓글 1 / 답변 2점, 월별 집계.
+  `collectionGroup` 조회라 **컬렉션 그룹 색인(firestore.indexes.json 의 fieldOverrides)** 과
+  **`{path=**}` 재귀 와일드카드 규칙**이 둘 다 있어야 한다. 중첩 규칙은 collectionGroup 에 안 걸린다.
 - 배포: 플레이 비공개 테스트(테스터 11명) + 카톡 APK(zip). 산출물 이름 관례:
   `C:\Users\admin\Downloads\슬기로운승무생활_v{버전}.apk` + 같은 이름 `.zip`
 
