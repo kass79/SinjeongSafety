@@ -13,7 +13,13 @@ data class Attachment(
     val name: String = "",
     val url: String = "",
     val mimeType: String = "",
-    val size: Long = 0L
+    val size: Long = 0L,
+    /**
+     * 동영상 포스터(첫 화면) 이미지 주소. 재생 전에 이걸 깔아 무슨 영상인지 보이게 한다.
+     * 업로드할 때 자동으로 뽑아 올리며, 추출에 실패했거나 옛 게시물이면 빈 문자열이다
+     * — 그 경우 예전처럼 검은 화면 + 재생 버튼으로 나간다(호환).
+     */
+    val posterUrl: String = ""
 ) {
     val isImage: Boolean get() = mimeType.startsWith("image/")
     val isVideo: Boolean get() = mimeType.startsWith("video/")

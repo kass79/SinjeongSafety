@@ -13,6 +13,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.media.ExifInterface
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
@@ -75,7 +76,67 @@ class PostRepository {
             // 압축에 실패했거나 오히려 커진 경우엔 원본을 그대로 올린다.
             ref.putFile(uri).await()
             val url = ref.downloadUrl.await().toString()
-            Attachment(name = name, url = url, mimeType = mimeType, size = size)
+            // 동영상이면 포스터(첫 화면)도 같이 올린다. 이 함수는 게시물·출무점호·질의응답이
+            // 모두 거쳐가는 한 곳이라 여기서 만들면 어느 화면에서 올려도 포스터가 붙는다.
+            val poster = if (mimeType.startsWith("video/")) uploadPoster(context, uri, safeName) else ""
+            Attachment(name = name, url = url, mimeType = mimeType, size = size, posterUrl = poster)
+        }
+    }
+
+    /**
+     * 동영상의 한 장면을 JPEG 로 뽑아 Storage 에 올리고 그 주소를 돌려준다(실패하면 빈 문자열).
+     *
+     * 2초 지점을 쓰는 이유: 교육영상이 페이드인으로 시작해 0~1초는 거의 검은 화면이다
+     * (실제 교육영상 4편으로 확인 — 0초는 새까맣고, 1초는 제목이 반쯤 뜬 상태, 2초에 제목 카드가 다 뜬다).
+     * 2초보다 짧은 영상은 첫 프레임으로 물러선다.
+     *
+     * OPTION_CLOSEST 를 쓰는 게 핵심이다. 흔히 쓰는 OPTION_CLOSEST_SYNC 는 '가장 가까운 키프레임'을
+     * 주는데, 이 교육영상들은 키프레임이 0초 다음이 8.3초라(ffprobe 로 확인) 2초를 달라고 해도
+     * 0초 키프레임 — 바로 그 새까만 화면 — 이 돌아온다. CLOSEST 는 키프레임부터 풀어서
+     * 진짜 2초 프레임을 준다. 2초어치 디코딩은 업로드 시간에 비하면 없는 셈이다.
+     *
+     * 코덱·권한 문제로 추출이 실패할 수 있는데, 그때 업로드 전체를 죽이면 안 된다
+     * — 포스터는 있으면 좋은 것이지 영상 자체가 아니다. 그래서 전부 삼키고 빈 문자열을 준다.
+     */
+    private suspend fun uploadPoster(
+        context: Context,
+        uri: Uri,
+        safeName: String
+    ): String = withContext(Dispatchers.IO) {
+        // minSdk 26 이라 MediaMetadataRetriever 는 use{} 를 못 쓴다(AutoCloseable 은 API 29부터).
+        val retriever = MediaMetadataRetriever()
+        var frame: Bitmap? = null
+        var scaled: Bitmap? = null
+        try {
+            retriever.setDataSource(context, uri)
+            frame = retriever.getFrameAtTime(2_000_000L, MediaMetadataRetriever.OPTION_CLOSEST)
+                ?: retriever.getFrameAtTime()
+            val bmp = frame ?: return@withContext ""
+
+            // 목록·상세에서 볼 뿐이라 가로 1080 이면 충분하다(사진 축소 관례와 같은 눈높이).
+            val scale = 1080f / maxOf(bmp.width, bmp.height)
+            scaled = if (scale < 1f) {
+                Bitmap.createScaledBitmap(
+                    bmp, (bmp.width * scale).toInt(), (bmp.height * scale).toInt(), true
+                )
+            } else bmp
+
+            val out = ByteArrayOutputStream()
+            scaled.compress(Bitmap.CompressFormat.JPEG, 82, out)
+
+            val posterRef = storage.reference
+                .child("attachments/${System.currentTimeMillis()}_poster_$safeName.jpg")
+            val meta = StorageMetadata.Builder().setContentType("image/jpeg").build()
+            posterRef.putBytes(out.toByteArray(), meta).await()
+            posterRef.downloadUrl.await().toString()
+        } catch (e: Exception) {
+            ""
+        } catch (e: OutOfMemoryError) {
+            ""
+        } finally {
+            if (scaled !== frame) scaled?.recycle()
+            frame?.recycle()
+            runCatching { retriever.release() }
         }
     }
 
@@ -165,7 +226,8 @@ class PostRepository {
             "authorName" to (user.email?.substringBefore("@") ?: "관리자"),
             "authorUid" to user.uid,
             "attachments" to attachments.map {
-                mapOf("name" to it.name, "url" to it.url, "mimeType" to it.mimeType, "size" to it.size)
+                mapOf("name" to it.name, "url" to it.url, "mimeType" to it.mimeType,
+                      "size" to it.size, "posterUrl" to it.posterUrl)
             },
             // 새 글에도 링크를 저장한다. 예전엔 이 줄이 없어서 글을 올릴 때 붙인 링크가
             // 조용히 사라지고, 수정 화면에서 다시 넣어야만 남았다(updatePost에는 있었다).
@@ -193,14 +255,16 @@ class PostRepository {
                 "title" to title.trim(),
                 "content" to content.trim(),
                 "attachments" to attachments.map {
-                    mapOf("name" to it.name, "url" to it.url, "mimeType" to it.mimeType, "size" to it.size)
+                    mapOf("name" to it.name, "url" to it.url, "mimeType" to it.mimeType,
+                          "size" to it.size, "posterUrl" to it.posterUrl)
                 },
                 "links" to links.map { mapOf("url" to it.url, "title" to it.title) },
                 "updatedAt" to FieldValue.serverTimestamp()
             ) + (if (docDate != null) mapOf("docDate" to docDate) else emptyMap())
         ).await()
         // 관리자가 첨부를 빼고 저장한 경우, 더 이상 쓰이지 않는 파일을 지운다.
-        val keep = attachments.map { it.url }.toSet()
+        // 포스터도 keep 에 넣어야 한다 — 빼면 남겨 둔 영상의 포스터가 지워져 썸네일만 깨진다.
+        val keep = attachments.flatMap { listOf(it.url, it.posterUrl) }.toSet()
         deleteFiles(beforeUrls.filter { it !in keep })
     }
 
@@ -356,7 +420,9 @@ class PostRepository {
         val snap = postsRef.document(id).get().await()
         @Suppress("UNCHECKED_CAST")
         val list = snap.get("attachments") as? List<Map<String, Any?>> ?: emptyList()
-        list.mapNotNull { it["url"] as? String }.filter { it.isNotBlank() }
+        // 포스터도 같이 걷는다. 안 걷으면 글을 지워도 포스터만 Storage 에 영영 남는다.
+        list.flatMap { listOf(it["url"] as? String, it["posterUrl"] as? String) }
+            .filterNotNull().filter { it.isNotBlank() }
     } catch (e: Exception) {
         emptyList()
     }

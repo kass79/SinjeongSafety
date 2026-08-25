@@ -871,6 +871,9 @@ private fun VideoPlayer(video: Attachment) {
     val posKey = remember(video.url) { "video_pos_" + video.url.hashCode() }
     // 막 시작한 영상은 이어볼 필요가 없다 — 30초 미만 지점은 저장도 복원도 하지 않는다.
     val minResumeMs = 30_000
+    // 재생 전 화면에 "이어서 보기"를 띄우기 위해 저장된 지점을 한 번 읽어 둔다.
+    // (재생을 시작하면 이 화면은 사라지므로 다시 읽을 일이 없다)
+    val savedMs = remember(posKey) { prefs.getInt(posKey, 0) }
     // 끝까지 본 뒤 화면을 나가면 currentPosition 이 '끝'이라 지운 걸 다시 쓰게 된다. 그래서 기억해 둔다.
     val finished = remember { mutableStateOf(false) }
     fun savePos(v: VideoView?) {
@@ -928,8 +931,19 @@ private fun VideoPlayer(video: Attachment) {
                 Icon(Icons.Default.Fullscreen, "전체화면", tint = Color.White, modifier = Modifier.size(22.dp))
             }
         } else {
-            // 재생 전: 어두운 배경 + 재생 버튼 + 파일명
+            // 재생 전: 포스터(있으면) + 재생 버튼 + 파일명.
+            // 포스터가 없는 옛 게시물·추출 실패 건은 예전 그대로 검은 배경으로 나온다.
             Box(Modifier.fillMaxSize().clickable { playing = true }, contentAlignment = Alignment.Center) {
+                if (video.posterUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = video.posterUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    // 밝은 장면이 잡힌 포스터에서도 흰 글씨·재생 버튼이 묻히지 않게 살짝 덮는다.
+                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.18f)))
+                }
                 Box(
                     Modifier.size(56.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.92f)),
                     contentAlignment = Alignment.Center
@@ -937,7 +951,10 @@ private fun VideoPlayer(video: Attachment) {
                     Icon(Icons.Default.PlayArrow, "재생", tint = AppColors.Primary, modifier = Modifier.size(30.dp))
                 }
                 Text(
-                    "${video.name} · ${formatSize(video.size)}",
+                    // 보다 만 영상이면 파일명보다 "어디서부터 이어지는지"가 궁금하다.
+                    if (savedMs >= minResumeMs)
+                        "이어서 보기 · %d:%02d".format(savedMs / 60000, savedMs / 1000 % 60)
+                    else "${video.name} · ${formatSize(video.size)}",
                     color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.align(Alignment.BottomStart).padding(10.dp)
