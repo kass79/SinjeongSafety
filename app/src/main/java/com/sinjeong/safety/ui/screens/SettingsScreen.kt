@@ -80,6 +80,8 @@ fun SettingsScreen(
     val crewName by vm.crewName.collectAsState()
     val crewEmpNo by vm.crewEmpNo.collectAsState()
     val isAdmin by vm.isAdmin.collectAsState()
+    // '관리' 섹션의 두 항목(포인트·명단)은 관리자 전체가 아니라 지정된 두 사번에게만 보인다
+    val isDevAdmin by vm.isDevAdmin.collectAsState()
     val notifyOn by vm.notificationsEnabled.collectAsState()
     val useLocationOn by vm.useLocationWeather.collectAsState()
 
@@ -214,8 +216,9 @@ fun SettingsScreen(
 
                 Spacer(Modifier.height(22.dp))
 
-                // ── 관리 (관리자에게만 보인다) ─────────────────
-                if (isAdmin) {
+                // ── 관리 (지정된 두 사번에게만 보인다) ─────────
+                // 이 섹션은 포인트·명단 두 항목뿐이므로 제목까지 통째로 감춘다.
+                if (isDevAdmin) {
                     SectionTitle("관리")
                     Card(
                         colors = CardDefaults.cardColors(containerColor = AppColors.Surface),

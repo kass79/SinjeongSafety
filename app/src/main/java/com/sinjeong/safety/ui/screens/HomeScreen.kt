@@ -13,6 +13,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.widget.Toast
+import android.widget.VideoView
+import androidx.compose.ui.viewinterop.AndroidView
 import com.sinjeong.safety.BuildConfig
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -24,6 +26,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
@@ -54,6 +57,7 @@ import androidx.compose.material.icons.filled.AttachFile
 import coil.compose.AsyncImage
 import com.sinjeong.safety.MainViewModel
 import com.sinjeong.safety.R
+import com.sinjeong.safety.data.Attachment
 import com.sinjeong.safety.data.Briefing
 import com.sinjeong.safety.data.BriefingItem
 import com.sinjeong.safety.data.Categories
@@ -151,6 +155,15 @@ fun HomeScreen(
     // 대신 아래 목록에 '연-월'이 바뀌는 지점마다 구분선을 넣는다.
     // 월별 건수는 목록이 바뀔 때만 다시 센다(필터·검색이 걸리면 걸러진 목록 기준으로 재계산).
     val monthCounts = remember(posts) { posts.groupingBy { it.monthKey() }.eachCount() }
+
+    // 본문 '더보기'로 펼친 글. 반드시 목록 **바깥**에서 글 id 로 들고 있어야 한다 —
+    // 카드 안에서 remember 하면 LazyColumn 이 스크롤하며 컴포저블을 재활용할 때
+    // 펼침 상태가 다른 글에 얹혀 "엉뚱한 카드가 펼쳐진다".
+    val expandedIds = remember { mutableStateMapOf<String, Boolean>() }
+    // 피드 영상 재생 상태도 같은 이유로 목록 바깥에 둔다(한 번에 하나만 재생).
+    val feedVideos = remember { FeedVideoState() }
+    // 확인 기록이 있는 글은 영상을 다 봐도 확인 버튼을 띄우지 않는다.
+    val confirmedIds by vm.confirmedIds.collectAsState()
 
     Scaffold(
         containerColor = AppColors.Background,
@@ -275,6 +288,10 @@ fun HomeScreen(
                     PostCard(
                         post = post,
                         isNew = post.isNew(readIds),
+                        expanded = expandedIds[post.id] == true,
+                        onToggleExpand = { expandedIds[post.id] = expandedIds[post.id] != true },
+                        videos = feedVideos,
+                        confirmed = post.id in confirmedIds,
                         onClick = { onPostClick(post) }
                     )
                 }
@@ -342,21 +359,64 @@ private fun HeaderBar(
         val warning = weather?.warning
         val warnActive = warning != null
 
-        Image(
-            painter = painterResource(R.drawable.mascot_hello),
-            contentDescription = "마스코트",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(if (narrow) 36.dp else 40.dp)
-                .clip(RoundedCornerShape(15.dp))
-                .background(Color(0xFFE8F0FC))
-                .border(2.dp, Color.White, RoundedCornerShape(15.dp))
-        )
-        Spacer(Modifier.width(if (narrow) 6.dp else 8.dp))
+        // 왼쪽 정보 묶음 — 마스코트 · 사업소명/부제 · 날씨를 **한 Row 에** 담는다.
+        // 셋이 형제여야 세로 가운데가 하나로 맞는다. 날씨를 Column(제목+부제) 안에 넣었더니
+        // 윗줄에만 걸려 마스코트보다 위로 떴고, 바깥으로 빼면 제목에서 멀어져 오른쪽 버튼에 붙었다.
+        // 이 묶음이 weight(1f) 로 남는 폭을 차지하고, 그 안에서 제목만 fill=false 로 줄어든다 —
+        // 좁은 화면에서 날씨가 밀려나지 않고 제목이 먼저 말줄임된다.
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                painter = painterResource(R.drawable.mascot_hello),
+                contentDescription = "마스코트",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(if (narrow) 36.dp else 40.dp)
+                    .clip(RoundedCornerShape(15.dp))
+                    .background(Color(0xFFE8F0FC))
+                    .border(2.dp, Color.White, RoundedCornerShape(15.dp))
+            )
+            Spacer(Modifier.width(if (narrow) 7.dp else 10.dp))
 
-        // 날씨 타일 — 마스코트와 **나란히** 둔다. 예전에는 사업소명과 같은 줄(Column 안)에
-        // 있어서 두 줄 묶음의 윗줄에만 걸렸고, 그래서 옆의 마스코트보다 위로 떠 높이가 어긋났다.
-        // 바깥 Row 로 꺼내면 마스코트와 똑같이 세로 가운데에 놓인다.
+            Column(Modifier.weight(1f, fill = false)) {
+                // maxLines 없이 두면 폭이 모자랄 때 제목이 세 줄까지 늘어나 헤더가 화면을 먹는다.
+                Text(
+                    "신정승무사업소",
+                    fontSize = if (narrow) hsp(16.0) else hsp(17.5),
+                    // 줄높이를 글자 크기에 붙여 둔다. 기본값은 글꼴이 위아래로 여백을 크게 잡아
+                    // 두 줄 묶음이 아래로 처져 보이고, 옆의 타일들과 높낮이가 어긋난다.
+                    lineHeight = if (narrow) hsp(18.0) else hsp(19.5),
+                    fontWeight = FontWeight.ExtraBold,
+                    color = AppColors.Primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(AppColors.OnlineGreen)
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        if (narrow) {
+                            if (isAdmin) "관리자 모드" else "안전정보 공유중"
+                        } else {
+                            if (isAdmin) "관리자님 (관리자 모드)" else "실시간 안전정보 공유중"
+                        },
+                        fontSize = if (narrow) hsp(9.5) else hsp(10.0),
+                        lineHeight = if (narrow) hsp(11.0) else hsp(11.5),
+                        color = AppColors.TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(if (narrow) 6.dp else 8.dp))
+
+        // 날씨 타일 — 사업소명 바로 오른쪽(사용자 요청). 마스코트와 같은 Row 라 높이가 맞는다.
         // 테두리는 눌러 놓았다 — 진한 선이 마스코트의 부드러운 타일과 따로 놀았다.
         // 특보일 때만 주황으로 또렷하게 살린다(그때는 눈에 띄어야 한다).
         Box {
@@ -395,55 +455,18 @@ private fun HeaderBar(
                             }
                         }
                     }
-            if (warnActive) {
-                Box(
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .size(9.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFFF6B00))
-                        .border(1.5.dp, AppColors.Background, CircleShape)
-                )
+                if (warnActive) {
+                    Box(
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFF6B00))
+                            .border(1.5.dp, AppColors.Background, CircleShape)
+                    )
+                }
             }
-        }
-        Spacer(Modifier.width(if (narrow) 7.dp else 10.dp))
-
-        Column(Modifier.weight(1f)) {
-            // maxLines 없이 두면 폭이 모자랄 때 제목이 세 줄까지 늘어나 헤더가 화면을 먹는다.
-            Text(
-                "신정승무사업소",
-                fontSize = if (narrow) hsp(16.0) else hsp(17.5),
-                // 줄높이를 글자 크기에 붙여 둔다. 기본값은 글꼴이 위아래로 여백을 크게 잡아
-                // 두 줄 묶음이 아래로 처져 보이고, 옆의 타일들과 높낮이가 어긋난다.
-                lineHeight = if (narrow) hsp(18.0) else hsp(19.5),
-                fontWeight = FontWeight.ExtraBold,
-                color = AppColors.Primary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(2.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(AppColors.OnlineGreen)
-                )
-                Spacer(Modifier.width(5.dp))
-                Text(
-                    if (narrow) {
-                        if (isAdmin) "관리자 모드" else "안전정보 공유중"
-                    } else {
-                        if (isAdmin) "관리자님 (관리자 모드)" else "실시간 안전정보 공유중"
-                    },
-                    fontSize = if (narrow) hsp(9.5) else hsp(10.0),
-                    lineHeight = if (narrow) hsp(11.0) else hsp(11.5),
-                    color = AppColors.TextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
+        } // 왼쪽 정보 묶음 끝
         if (showWeatherDialog) {
             AlertDialog(
                 onDismissRequest = { showWeatherDialog = false },
@@ -698,9 +721,25 @@ private fun CategoryRow(
     }
 }
 
-// ── 게시물 카드 ─────────────────────────────────────────────────
+// ── 게시물 카드 (밴드 피드처럼 본문·사진을 카드에서 바로 읽는다) ──
+/**
+ * 접었을 때 보여줄 본문 줄 수. 밴드가 대략 5~7줄이고, 여기 글은 공문이라 더 길다.
+ * 6줄이면 "무슨 일이 있었나"(발생 일시·장소·원인 한 문단)까지는 들어가고,
+ * 카드 하나가 사진 영역(최대 220dp)까지 합쳐도 화면 절반을 넘지 않아
+ * 다음 글이 화면에 걸쳐 보인다 — 피드로서 훑는 맛이 유지되는 상한이다.
+ */
+private const val FEED_BODY_LINES = 6
+
 @Composable
-fun PostCard(post: Post, isNew: Boolean, onClick: () -> Unit) {
+fun PostCard(
+    post: Post,
+    isNew: Boolean,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
+    videos: FeedVideoState,
+    confirmed: Boolean,
+    onClick: () -> Unit
+) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = if (post.pinned) Color(0xFFFFFBF4) else AppColors.Surface,
@@ -765,40 +804,77 @@ fun PostCard(post: Post, isNew: Boolean, onClick: () -> Unit) {
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                post.content,
-                fontSize = 13.sp,
-                color = AppColors.TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            // 첨부 이미지 썸네일 (최대 3장, 초과분은 +N)
-            val images = post.attachments.filter { it.isImage }
-            if (images.isNotEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    images.take(3).forEachIndexed { i, img ->
-                        if (i == 2 && images.size > 3) {
-                            Box(
-                                Modifier.size(74.dp).clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFF16265C)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("+${images.size - 2}", color = Color.White,
-                                    fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                            }
-                        } else {
-                            AsyncImage(
-                                model = img.url, contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(74.dp).clip(RoundedCornerShape(12.dp))
-                            )
-                        }
-                    }
+            // ── 본문: 상세와 같은 평문(상세도 마크다운을 쓰지 않고 URL 만 링크로 만든다).
+            // 피드에서는 링크를 눌리게 하지 않는다 — 카드 탭(상세 열기)과 싸운다.
+            if (post.content.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                // 접었을 때 실제로 넘쳤는지는 그려 봐야 안다. 펼친 뒤에는 넘침이 사라지므로
+                // 그때 덮어쓰지 않아야 '접기'가 남는다. 글이 바뀌면(재활용) 다시 판정한다.
+                var overflowed by remember(post.id) { mutableStateOf(false) }
+                Text(
+                    post.content,
+                    fontSize = 14.sp,
+                    lineHeight = 21.sp,
+                    color = AppColors.TextPrimary,
+                    maxLines = if (expanded) Int.MAX_VALUE else FEED_BODY_LINES,
+                    overflow = TextOverflow.Ellipsis,
+                    onTextLayout = { if (!expanded) overflowed = it.hasVisualOverflow }
+                )
+                if (overflowed) {
+                    Text(
+                        if (expanded) "접기" else "…더보기",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = AppColors.Primary,
+                        modifier = Modifier
+                            .clickable(onClick = onToggleExpand)
+                            .padding(top = 4.dp, bottom = 2.dp)
+                    )
                 }
             }
-            Spacer(Modifier.height(8.dp))
+
+            // ── 미디어: 한 종류만 보여준다. 사진 > 영상 > PDF.
+            // 셋을 다 쌓으면 카드 하나가 화면을 통째로 먹어 피드가 아니게 된다.
+            // 나머지가 있다는 사실은 아래 첨부 뱃지가 이미 말해 준다.
+            val images = post.attachments.filter { it.isImage }
+            val video = post.attachments.firstOrNull { it.isVideo && it.posterUrl.isNotBlank() }
+            val pdf = post.attachments.firstOrNull { it.isPdf && it.pageUrls.isNotEmpty() }
+            when {
+                images.isNotEmpty() -> { Spacer(Modifier.height(10.dp)); FeedImages(images) }
+                video != null -> {
+                    Spacer(Modifier.height(10.dp))
+                    FeedVideo(
+                        video = video,
+                        playing = videos.isPlaying(video.url),
+                        onPlay = { videos.play(video.url) },
+                        onGone = { videos.gone(video.url) },
+                        onCompleted = { videos.completed(post.id, video.url) }
+                    )
+                }
+                pdf != null -> { Spacer(Modifier.height(10.dp)); FeedPdfCover(pdf) }
+            }
+
+            // 영상을 끝까지 봤는데 아직 확인 기록이 없으면 상세로 보내 준다.
+            // 확인 처리와 퀴즈는 상세에만 있어서, 피드에서 다 보고 넘어가면 기록이 통째로
+            // 안 남는다 — 확인 현황·직원 포인트·서명부가 비어 버린다. 그래서 이 버튼이 필요하다.
+            if (videos.isWatched(post.id) && !confirmed) {
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = AppColors.Primary,
+                    modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+                ) {
+                    Text(
+                        if (post.quiz.isNotEmpty()) "퀴즈 풀고 확인" else "확인하기",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 11.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "${post.category} · ${post.authorName} · 조회 ${post.views}",
@@ -836,6 +912,250 @@ fun PostCard(post: Post, isNew: Boolean, onClick: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+
+// ── 피드용 미디어 ───────────────────────────────────────────────
+// 상세(DetailScreen)의 갤러리·재생기를 그대로 쓰지 않는다. 그쪽은 재생·전체화면·이어보기까지
+// 물고 있어 목록에 수십 개가 붙으면 무겁다. 여기서는 "보여주기"만 한다.
+//
+// 높이 상한 220dp: 공문 스캔은 세로로 길어서 비율대로 그리면 카드 하나가 화면을 다 먹는다.
+// Coil 은 컴포저블에 잡힌 크기에 맞춰 원본을 줄여 디코딩하므로(AsyncImage 기본 동작),
+// 아래처럼 높이를 확정해 두면 1600px 짜리 공문 그림도 그 크기로만 메모리에 올라온다.
+private val FEED_MEDIA_MAX_H = 220.dp
+
+@Composable
+private fun FeedImages(images: List<Attachment>) {
+    if (images.size == 1) {
+        AsyncImage(
+            model = images[0].url,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            // 공문·안내문은 위에서부터 읽는다. 가운데를 잘라 보여주면 제목이 날아간다.
+            alignment = Alignment.TopCenter,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(FEED_MEDIA_MAX_H)
+                .clip(RoundedCornerShape(12.dp))
+        )
+        return
+    }
+    // 2장은 반반, 3장 이상은 3등분 + 마지막 칸에 +N. 넘치는 장수는 상세에서 본다.
+    val h = if (images.size == 2) 150.dp else 110.dp
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        images.take(3).forEachIndexed { i, img ->
+            Box(
+                Modifier.weight(1f).height(h).clip(RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = img.url,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (i == 2 && images.size > 3) {
+                    Box(
+                        Modifier.fillMaxSize().background(Color(0xCC16265C)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "+${images.size - 3}", color = Color.White,
+                            fontSize = 18.sp, fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 피드 영상 재생 상태. **반드시 목록 바깥**(HomeScreen)에서 들고 있어야 한다.
+ * 카드 안에 두면 LazyColumn 이 스크롤하며 컴포저블을 재활용할 때 상태가 남의 글에 얹힌다.
+ *
+ * 한 번에 하나만 재생한다 — [playingUrl] 하나뿐이라 다른 카드의 재생 버튼을 누르면
+ * 앞의 카드는 자동으로 재생 아님이 되어 재생기가 해제된다(소리 겹침이 구조적으로 불가능).
+ * 이 앱에서 실제로 소리가 겹치는 사고가 났던 적이 있어(상세 화면 전체화면 전환) 상태를
+ * 두 벌 두지 않는 것으로 막는다.
+ */
+@Stable
+class FeedVideoState {
+    var playingUrl by mutableStateOf<String?>(null)
+        private set
+
+    /** 끝까지 본 글. 확인 버튼을 띄우려고 기억한다(글 id 기준이라 재활용에 흔들리지 않는다). */
+    private val watched = mutableStateMapOf<String, Boolean>()
+
+    fun isPlaying(url: String) = playingUrl == url
+    fun play(url: String) { playingUrl = url }
+    fun stop() { playingUrl = null }
+
+    /** 카드가 화면 밖으로 밀려 사라졌을 때. 그 사이 다른 영상이 시작됐으면 건드리지 않는다. */
+    fun gone(url: String) { if (playingUrl == url) playingUrl = null }
+
+    fun completed(postId: String, url: String) {
+        watched[postId] = true
+        gone(url)
+    }
+    fun isWatched(postId: String) = watched[postId] == true
+}
+
+/**
+ * 피드 안에서 눌러 재생하는 영상. **자동재생은 하지 않는다** — 스크롤만으로 영상이 돌면
+ * 데이터·배터리가 새고 목록도 버벅인다. 반드시 사용자가 포스터를 눌러야 시작한다.
+ *
+ * 되감기·전체화면은 일부러 뺐다. MediaController 는 앵커 뷰에 붙는 팝업 창이라
+ * 목록에서 항목이 버려지는 순간 창이 남고, 전체화면은 화면 방향 전환이 얽혀 있어
+ * 상세 화면에서만 다룬다(DetailScreen 의 회전·재생성 주석 참고). 크게 볼 사람은 카드를 눌러 상세로.
+ */
+@Composable
+private fun FeedVideo(
+    video: Attachment,
+    playing: Boolean,
+    onPlay: () -> Unit,
+    onGone: () -> Unit,
+    onCompleted: () -> Unit
+) {
+    val context = LocalContext.current
+    val prefs = remember(context) { videoPrefs(context) }
+    val posKey = remember(video.url) { videoPosKey(video.url) }
+    // 포스터에 "이어서 보기"를 띄우려고 읽는다. 재생을 멈추고 돌아왔을 때 갱신돼야 해서
+    // playing 이 바뀔 때 다시 읽는다.
+    val savedMs = remember(posKey, playing) { prefs.getInt(posKey, 0) }
+    // 끝까지 본 뒤 해제될 때 '끝 지점'을 되저장하면 다음에 열었을 때 아무것도 안 보인다.
+    val finished = remember(video.url) { mutableStateOf(false) }
+    var view by remember(video.url) { mutableStateOf<VideoView?>(null) }
+    var paused by remember(video.url) { mutableStateOf(false) }
+
+    // 스크롤로 이 카드가 목록에서 사라지면 부모의 '재생 중' 표시를 지운다.
+    // (재생기 자체는 아래 onRelease 가 끊는다. 여기서 안 지우면 부모는 사라진 카드가
+    //  아직 재생 중이라고 믿어 다음 재생을 이상하게 판단한다.)
+    DisposableEffect(video.url) { onDispose { onGone() } }
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.Black)
+            .aspectRatio(16f / 9f),
+        contentAlignment = Alignment.Center
+    ) {
+        if (playing) {
+            AndroidView(
+                factory = { ctx ->
+                    VideoView(ctx).apply {
+                        setVideoURI(Uri.parse(video.url))
+                        setOnPreparedListener {
+                            val saved = prefs.getInt(posKey, 0)
+                            if (saved >= VIDEO_MIN_RESUME_MS) seekTo(saved)
+                            it.start()
+                        }
+                        setOnCompletionListener {
+                            finished.value = true
+                            // 다음에 열면 처음부터. 안 지우면 늘 끝에서 시작해 아무것도 안 보인다.
+                            prefs.edit().remove(posKey).apply()
+                            onCompleted()
+                        }
+                        view = this
+                    }
+                },
+                // ★ 여기가 이 기능에서 제일 위험한 자리다.
+                // 화면 밖으로 밀리거나(항목 버림) 다른 카드가 재생을 시작하면 이 뷰가 해제되는데,
+                // stopPlayback() 을 부르지 않으면 화면만 사라지고 **소리는 계속 난다**.
+                onRelease = { v ->
+                    val ms = v.currentPosition
+                    if (!finished.value && ms >= VIDEO_MIN_RESUME_MS) {
+                        prefs.edit().putInt(posKey, ms).apply()
+                    }
+                    v.stopPlayback()
+                    view = null
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+            // 재생 중 화면을 누르면 멈춤/재개(되감기는 상세에서).
+            Box(
+                Modifier.fillMaxSize().clickable {
+                    val v = view
+                    // 재생기가 이미 해제됐는데 '재생 중' 표시만 남은 경우가 있다(스크롤 타이밍).
+                    // 그대로 두면 아무것도 안 나오는 검은 상자에 갇히므로 포스터로 되돌린다.
+                    if (v == null) onGone()
+                    else if (v.isPlaying) { v.pause(); paused = true }
+                    else { v.start(); paused = false }
+                },
+                contentAlignment = Alignment.Center
+            ) {
+                if (paused) {
+                    Box(
+                        Modifier.size(56.dp).clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.92f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.PlayArrow, "재생", tint = AppColors.Primary,
+                            modifier = Modifier.size(30.dp))
+                    }
+                }
+            }
+        } else {
+            // 재생 전: 포스터 + 재생 버튼. 포스터가 없는 옛 영상은 검은 배경으로 나온다.
+            Box(
+                Modifier.fillMaxSize().clickable(onClick = onPlay),
+                contentAlignment = Alignment.Center
+            ) {
+                if (video.posterUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = video.posterUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    // 밝은 포스터에서도 재생 버튼·글씨가 묻히지 않게 살짝 덮는다(상세와 같은 처리).
+                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.18f)))
+                }
+                Box(
+                    Modifier.size(56.dp).clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.92f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.PlayArrow, "재생", tint = AppColors.Primary,
+                        modifier = Modifier.size(30.dp))
+                }
+                Text(
+                    if (savedMs >= VIDEO_MIN_RESUME_MS)
+                        "이어서 보기 · %d:%02d".format(savedMs / 60000, savedMs / 1000 % 60)
+                    else "${video.name} · ${formatSize(video.size)}",
+                    color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(10.dp)
+                )
+            }
+        }
+    }
+}
+
+/** PDF 는 첫 쪽만 표지처럼 보여주고 쪽 수를 알려 준다. 나머지는 상세에서 펼친다. */
+@Composable
+private fun FeedPdfCover(pdf: Attachment) {
+    Column {
+        AsyncImage(
+            model = pdf.pageUrls.first(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            alignment = Alignment.TopCenter,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(FEED_MEDIA_MAX_H)
+                .clip(RoundedCornerShape(10.dp))
+                // 흰 종이가 흰 카드에 묻히지 않게 가장자리를 그어 준다(상세와 같은 처리).
+                .border(1.dp, AppColors.Divider, RoundedCornerShape(10.dp))
+        )
+        Text(
+            "PDF ${maxOf(pdf.pageCount, pdf.pageUrls.size)}쪽 · 눌러서 전체 보기",
+            fontSize = 11.5.sp,
+            color = AppColors.TextHint,
+            modifier = Modifier.padding(top = 5.dp)
+        )
     }
 }
 

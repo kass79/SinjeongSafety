@@ -14,8 +14,8 @@ android {
         applicationId = "com.sinjeong.safety"
         minSdk = 26
         targetSdk = 36
-        versionCode = 42
-        versionName = "1.11.0"
+        versionCode = 43
+        versionName = "1.12.0"
     }
 
     signingConfigs {

@@ -233,5 +233,12 @@ class CrewRepository {
     companion object {
         const val CREW_DOMAIN = "sinjeong.app"
         const val ADMIN_EMAIL = "admin@sinjeong.app"
+
+        /**
+         * 직원 포인트 현황·직원 명단 관리를 여는 두 사람의 사번. 사용자 지정 2026-08-25.
+         * 관리자 계정(ADMIN_EMAIL)이라도 이 사번으로 확인한 기기가 아니면 두 메뉴가 보이지 않는다.
+         * 이름은 적지 않는다 — 실명은 저장소·APK 에 두지 않고 Firestore config/rosterNames 에만 둔다.
+         */
+        val DEV_EMP_NOS = setOf("21713087", "22200311")
     }
 }

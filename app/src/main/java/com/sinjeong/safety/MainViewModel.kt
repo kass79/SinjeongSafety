@@ -104,11 +104,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _crewVerifiedOnce =
         MutableStateFlow(prefs.getBoolean("crew_verified_once", false))
 
+    // 이 기기에서 사번+PIN 으로 확인한 사번.
+    // crewEmpNo 와 따로 두는 이유: 관리자로 로그인하면 Firebase 세션이 관리자 계정으로 바뀌고,
+    // CrewRepository.currentEmpNo() 는 관리자 이메일이면 null 을 준다. 즉 관리자 모드로 앱을
+    // 다시 켜면 '이 기기를 쓰는 사람이 누구인지'를 앱이 잊어버린다. 개발자 두 명 판정(isDevAdmin)은
+    // 관리자 모드에서 해야 하므로, 확인한 순간의 사번을 기기에 남겨 두고 그걸로 판정한다.
+    private val _verifiedEmpNo =
+        MutableStateFlow(prefs.getString("crew_emp_no", null) ?: crewRepo.currentEmpNo())
+
     /** 사번+PIN 확인에 성공한 순간 표식을 남긴다 (등록·로그인 공통) */
-    private fun markCrewVerified() {
+    private fun markCrewVerified(empNo: String) {
         _crewVerifiedOnce.value = true
-        prefs.edit().putBoolean("crew_verified_once", true).apply()
+        _verifiedEmpNo.value = empNo
+        prefs.edit()
+            .putBoolean("crew_verified_once", true)
+            .putString("crew_emp_no", empNo)
+            .apply()
     }
+
+    /**
+     * 직원 포인트 현황·직원 명단 관리를 열 수 있는가.
+     * 관리자 계정 + 지정 사번(DEV_EMP_NOS)으로 확인한 기기, 둘 다여야 한다.
+     * 관리자 비밀번호만 아는 사람은 볼 수 없고, 지정 사번이라도 관리자 모드가 아니면 보이지 않는다
+     * (두 화면이 읽는 데이터는 어차피 관리자 계정만 권한이 있다).
+     */
+    val isDevAdmin: StateFlow<Boolean> =
+        combine(_isAdmin, _verifiedEmpNo) { admin, empNo ->
+            admin && empNo in CrewRepository.DEV_EMP_NOS
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // ── 날씨 칩 (기온·하늘·기상특보) ────────────────────────────
     private val _weather = MutableStateFlow<WeatherNow?>(null)
@@ -244,6 +267,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _requireLogin.value = crewRepo.requireLogin()
         }
         if (crewRepo.isCrewLoggedIn()) syncFavorites()
+        // 이미 승무원으로 로그인한 채 이 버전을 받은 기기: 지금 사번을 남겨 둔다.
+        // 남기지 않으면 나중에 관리자 모드로 바꾼 뒤 앱을 다시 켤 때 사번을 잃는다.
+        _verifiedEmpNo.value?.let { prefs.edit().putString("crew_emp_no", it).apply() }
         // 날씨·기상특보 확인
         loadWeather()
         viewModelScope.launch {
@@ -395,7 +421,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _crewEmpNo.value = empNo.trim()
                 _crewName.value = name.trim()
                 prefs.edit().putString("crew_name", name.trim()).apply()
-                markCrewVerified()
+                markCrewVerified(empNo.trim())
                 syncFavorites()
                 _message.value = UiMessage("${name.trim()} 님, 환영합니다")
                 onSuccess()
@@ -429,7 +455,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _crewName.value = n
                     prefs.edit().putString("crew_name", n).apply()
                 }
-                markCrewVerified()
+                markCrewVerified(empNo.trim())
                 syncFavorites()
                 onSuccess()
             } catch (e: com.google.firebase.auth.FirebaseAuthInvalidUserException) {
@@ -451,8 +477,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _isAdmin.value = false
         // 관리자 로그아웃(logout)과 달리 승무원이 스스로 나간 것이므로 기기 표식도 지운다.
         // 의도적으로 나갔으면 다시 로그인 게이트가 뜨는 게 맞다 (폰을 넘겨줄 때 등).
+        // 사번도 함께 지운다 — 폰을 넘겨받은 사람에게 개발자 메뉴가 따라가면 안 된다.
         _crewVerifiedOnce.value = false
-        prefs.edit().putBoolean("crew_verified_once", false).apply()
+        _verifiedEmpNo.value = null
+        prefs.edit()
+            .putBoolean("crew_verified_once", false)
+            .remove("crew_emp_no")
+            .apply()
         _message.value = UiMessage("로그아웃했습니다")
     }
 

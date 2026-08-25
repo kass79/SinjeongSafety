@@ -95,6 +95,8 @@ class MainActivity : ComponentActivity() {
                 val message by vm.message.collectAsState()
                 // 로그인 강제 스위치가 켜져 있고 아직 로그인 전이면 로그인 화면부터 보여준다.
                 val needLogin by vm.needCrewLogin.collectAsState()
+                // 직원 포인트·명단 관리는 관리자 전체가 아니라 지정된 두 사번만 연다
+                val isDevAdmin by vm.isDevAdmin.collectAsState()
 
                 LaunchedEffect(message) {
                     message?.let {
@@ -139,12 +141,16 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            // 메뉴를 감춰도 라우트는 살아 있다. 딥링크·뒤로가기 스택으로 들어오는
+                            // 경로를 막으려면 화면 쪽에서도 같은 조건을 확인해 되돌려야 한다.
                             composable(Routes.POINTS) {
-                                AdminPointsScreen(onBack = { nav.popBackStack() })
+                                if (isDevAdmin) AdminPointsScreen(onBack = { nav.popBackStack() })
+                                else LaunchedEffect(Unit) { nav.popBackStack() }
                             }
 
                             composable(Routes.ROSTER) {
-                                AdminRosterScreen(onBack = { nav.popBackStack() })
+                                if (isDevAdmin) AdminRosterScreen(onBack = { nav.popBackStack() })
+                                else LaunchedEffect(Unit) { nav.popBackStack() }
                             }
 
                             composable(Routes.REGULATION) {

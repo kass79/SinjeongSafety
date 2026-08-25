@@ -908,6 +908,18 @@ private fun AttachmentFileRow(doc: Attachment) {
 }
 
 
+// ── 영상 이어보기 저장소 (상세 화면과 홈 피드가 같이 쓴다) ───────
+// 피드에서 보다 만 것을 상세에서 이어보고, 그 반대도 되게 하려면 키가 하나여야 한다.
+// 두 파일에서 따로 만들면 언젠가 반드시 어긋나므로 여기 한 벌만 두고 양쪽이 부른다.
+// URL 은 업로드 시각+파일명이라 유일하지만 특수문자가 많아 키로 못 쓴다 → 해시를 키로.
+fun videoPrefs(context: Context): android.content.SharedPreferences =
+    context.getSharedPreferences("safety_prefs", Context.MODE_PRIVATE)
+
+fun videoPosKey(url: String): String = "video_pos_" + url.hashCode()
+
+/** 막 시작한 영상은 이어볼 필요가 없다 — 이 지점 미만은 저장도 복원도 하지 않는다. */
+const val VIDEO_MIN_RESUME_MS = 30_000
+
 // ── 첨부 동영상 인앱 재생 (탭하면 재생) ─────────────────────────
 @Composable
 private fun VideoPlayer(video: Attachment) {
@@ -926,11 +938,10 @@ private fun VideoPlayer(video: Attachment) {
     }
 
     // ── 이어보기: 재생 위치를 기기에 저장한다(DB·새 라이브러리 없이 SharedPreferences 로 충분) ──
-    // URL 은 업로드 시각+파일명이라 유일하지만 특수문자가 많아 키로 쓸 수 없다 → 해시를 키로.
-    val prefs = remember(context) { context.getSharedPreferences("safety_prefs", Context.MODE_PRIVATE) }
-    val posKey = remember(video.url) { "video_pos_" + video.url.hashCode() }
-    // 막 시작한 영상은 이어볼 필요가 없다 — 30초 미만 지점은 저장도 복원도 하지 않는다.
-    val minResumeMs = 30_000
+    // 키·기준은 위의 공용 저장소를 쓴다 — 홈 피드에서 보던 지점을 여기서 그대로 이어받는다.
+    val prefs = remember(context) { videoPrefs(context) }
+    val posKey = remember(video.url) { videoPosKey(video.url) }
+    val minResumeMs = VIDEO_MIN_RESUME_MS
     // 재생 전 화면에 "이어서 보기"를 띄우기 위해 저장된 지점을 한 번 읽어 둔다.
     // (재생을 시작하면 이 화면은 사라지므로 다시 읽을 일이 없다)
     val savedMs = remember(posKey) { prefs.getInt(posKey, 0) }
