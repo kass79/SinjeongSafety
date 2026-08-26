@@ -658,12 +658,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun addAnswer(questionId: String, content: String, onSuccess: () -> Unit) {
+    /** [parentId] 를 주면 그 답변의 답글이 된다(1단계까지만). 기본값이라 기존 호출부는 그대로다. */
+    fun addAnswer(questionId: String, content: String, parentId: String = "", onSuccess: () -> Unit) {
         if (content.isBlank()) return
         val (name, empNo) = questionAuthor()
         viewModelScope.launch {
             try {
-                questionRepo.addAnswer(questionId, content, name, empNo, _isAdmin.value)
+                questionRepo.addAnswer(questionId, content, name, empNo, _isAdmin.value, parentId)
                 onSuccess()
             } catch (e: Exception) {
                 _message.value = UiMessage("답변 등록 실패: ${e.localizedMessage}", true)

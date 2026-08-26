@@ -38,7 +38,15 @@ data class Answer(
     val authorName: String = "",
     val authorEmpNo: String = "",
     val isAdmin: Boolean = false,     // 관리자 답변이면 파란 체크 뱃지
-    val createdAt: Timestamp? = null
+    val createdAt: Timestamp? = null,
+    /**
+     * 답글이면 그 부모 답변의 id, 원답변이면 빈 문자열. 게시물 댓글(Comment.parentId)과 같은 규칙이다.
+     * 옛 답변 문서에는 이 필드가 아예 없으므로 기본값(빈 문자열)이 곧 "원답변"이 되어
+     * 그대로 호환된다 — 마이그레이션 없이 섞여 있어도 된다.
+     * 깊이는 1단계까지만 쓴다(답글의 답글 없음). 게시물 댓글과 다르게 동작하면
+     * 같은 앱 안에서 두 게시판이 따로 노는 셈이라 더 헷갈린다.
+     */
+    val parentId: String = ""
 )
 
 class QuestionRepository {
@@ -112,13 +120,19 @@ class QuestionRepository {
         ).await()
     }
 
-    /** 답변 작성. 질문의 답변 수도 함께 올린다. */
+    /**
+     * 답변 작성. 질문의 답변 수도 함께 올린다.
+     * [parentId] 가 비어 있으면 원답변, 값이 있으면 그 답변의 답글이다(1단계까지만).
+     * answerCount 는 게시물의 commentCount 와 마찬가지로 원답변·답글을 구분하지 않는 총 개수다
+     * — 화면이 보여 주는 "답변 N"(목록 전체 개수)과 어긋나지 않게 하려면 같이 세야 한다.
+     */
     suspend fun addAnswer(
         questionId: String,
         content: String,
         authorName: String,
         authorEmpNo: String,
-        isAdmin: Boolean
+        isAdmin: Boolean,
+        parentId: String = ""
     ) {
         col.document(questionId).collection("answers").add(
             mapOf(
@@ -126,6 +140,7 @@ class QuestionRepository {
                 "authorName" to authorName,
                 "authorEmpNo" to authorEmpNo,
                 "isAdmin" to isAdmin,
+                "parentId" to parentId,
                 "createdAt" to FieldValue.serverTimestamp()
             )
         ).await()
@@ -144,6 +159,12 @@ class QuestionRepository {
         col.document(id).delete().await()
     }
 
+    /**
+     * 답변 1건 삭제. 그 답변에 달린 답글은 함께 지우지 않는다 —
+     * 게시물 댓글과 같은 처리다. 남은 답글은 부모를 잃어 어디에도 못 붙으므로
+     * 화면(QuestionDetailScreen)이 맨 아래에 원답변처럼 그려서 사라지지 않게 한다.
+     * 같이 지우면 남의 글까지 관리자가 소리 없이 날리는 셈이라 그렇게 하지 않는다.
+     */
     suspend fun deleteAnswer(questionId: String, answerId: String) {
         col.document(questionId).collection("answers").document(answerId).delete().await()
         runCatching {

@@ -117,7 +117,13 @@ service cloud.firestore {
         allow create: if (isCrew() || isAdmin())
                       && request.resource.data.content is string
                       && request.resource.data.content.size() > 0
-                      && request.resource.data.content.size() <= 5000;
+                      && request.resource.data.content.size() <= 5000
+                      // 답글이면 부모 답변 id가 들어온다(원답변은 빈 문자열).
+                      // 필수로 하지 않는다 — 예전 앱이 깔린 폰은 이 필드를 보내지 않아
+                      // 필수로 걸면 그 사람들 답변이 통째로 막힌다. 있을 때만 형식을 본다.
+                      && (!('parentId' in request.resource.data)
+                          || (request.resource.data.parentId is string
+                              && request.resource.data.parentId.size() <= 200));
         allow delete: if isAdmin();
         allow update: if false;
       }
