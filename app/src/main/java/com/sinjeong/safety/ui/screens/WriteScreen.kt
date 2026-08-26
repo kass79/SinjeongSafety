@@ -26,10 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -95,9 +92,7 @@ fun WriteScreen(
         )
     }
     var title by remember { mutableStateOf(editing?.title ?: "") }
-    // 강조 버튼이 '고른 글자'를 알아야 해서 String 이 아니라 TextFieldValue 로 든다.
-    // (매번 새로 만들어 넘기면 한글 IME 의 조합 중 상태가 끊긴다 — 상태로 들고 그대로 돌려준다.)
-    var content by remember { mutableStateOf(TextFieldValue(editing?.content ?: "")) }
+    var content by remember { mutableStateOf(editing?.content ?: "") }
 
     // 첨부: 기존 유지분 + 새로 고른 파일
     var keptAttachments by remember { mutableStateOf(editing?.attachments ?: emptyList()) }
@@ -126,7 +121,7 @@ fun WriteScreen(
         newFiles = newFiles + picked
     }
 
-    val canSave = title.isNotBlank() && content.text.isNotBlank() && !isUploading
+    val canSave = title.isNotBlank() && content.isNotBlank() && !isUploading
 
     Scaffold(
         containerColor = AppColors.Background,
@@ -149,7 +144,7 @@ fun WriteScreen(
                             vm.savePost(
                                 editingId = editingPostId,
                                 category = category,
-                                title = title, content = content.text,
+                                title = title, content = content,
                                 keptAttachments = keptAttachments,
                                 newFileUris = newFiles.map { it.uri },
                                 links = links,
@@ -270,8 +265,7 @@ fun WriteScreen(
                         .clickable(enabled = photoReady && !aiLoading) {
                             vm.extractImageText(photoUris) { text ->
                                 // 쓰던 글을 덮어쓰지 않는다. 비어 있을 때만 바로 채운다.
-                                if (content.text.isBlank()) content = TextFieldValue(text)
-                                else extractedText = text
+                                if (content.isBlank()) content = text else extractedText = text
                             }
                         }
                 ) {
@@ -294,14 +288,14 @@ fun WriteScreen(
                     }
                 }
                 // 짧은 글은 요약할 게 없다 (서버 왕복만 낭비)
-                val aiReady = content.text.length >= 100 && !isUploading
+                val aiReady = content.length >= 100 && !isUploading
                 Surface(
                     shape = RoundedCornerShape(50),
                     color = if (aiReady) AppColors.TagOpsBg else AppColors.TagOpsBg.copy(alpha = 0.45f),
                     modifier = Modifier
                         .padding(bottom = 8.dp)
                         .clickable(enabled = aiReady && !aiLoading) {
-                            vm.summarizeWithAi(title, content.text) { aiSummary = it }
+                            vm.summarizeWithAi(title, content) { aiSummary = it }
                         }
                 ) {
                     Box(
@@ -334,29 +328,6 @@ fun WriteScreen(
                 },
                 shape = RoundedCornerShape(14.dp), colors = writeFieldColors(),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 190.dp)
-            )
-
-            // ── 강조 넣기 ──────────────────────────────────────
-            // 표기법만 안내하고 말면 폰에서 * 와 _ 를 찾아 네 번 눌러야 한다. 버튼으로 감싸 준다.
-            // 직접 치는 사람도 있으니 표기법은 아래 한 줄로 같이 알려 준다.
-            Spacer(Modifier.height(9.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                MarkButton(
-                    label = "형광펜",
-                    bg = AppColors.HighlightBg, fg = AppColors.HighlightFg,
-                    enabled = !isUploading
-                ) { content = wrapSelection(content, "**") }
-                Spacer(Modifier.width(8.dp))
-                MarkButton(
-                    label = "밑줄",
-                    bg = AppColors.Surface, fg = AppColors.TextPrimary,
-                    enabled = !isUploading, underline = true
-                ) { content = wrapSelection(content, "__") }
-            }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "정말 중요한 대목만 골라서 누르세요. 직접 쓸 때는 **형광펜** · __밑줄__ 입니다.",
-                fontSize = 11.5.sp, color = AppColors.TextSecondary, lineHeight = 16.sp
             )
 
             // ── 파일 · 동영상 첨부 ──────────────────────────────
@@ -493,7 +464,7 @@ fun WriteScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = {
-                        content = TextFieldValue("[3줄 요약]\n" + summary + "\n\n" + content.text)
+                        content = "[3줄 요약]\n" + summary + "\n\n" + content
                         aiSummary = null
                     }) {
                         Text("본문에 추가", fontWeight = FontWeight.Bold, color = AppColors.Primary)
@@ -531,13 +502,13 @@ fun WriteScreen(
                 confirmButton = {
                     Row {
                         TextButton(onClick = {
-                            content = TextFieldValue(text)
+                            content = text
                             extractedText = null
                         }) {
                             Text("바꾸기", color = AppColors.TextSecondary)
                         }
                         TextButton(onClick = {
-                            content = TextFieldValue(content.text.trimEnd() + "\n\n" + text)
+                            content = content.trimEnd() + "\n\n" + text
                             extractedText = null
                         }) {
                             Text("끝에 덧붙이기", fontWeight = FontWeight.Bold,
@@ -709,46 +680,3 @@ private fun writeFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedBorderColor = AppColors.Primary,
     unfocusedBorderColor = AppColors.Divider
 )
-
-/**
- * 고른 글자를 마커로 감싼다.
- *
- * 아무것도 안 골랐으면 마커만 넣고 그 사이에 커서를 둔다 — 이어서 타이핑하면 강조 안으로 들어간다.
- * 감싼 뒤 선택은 '안쪽 글자'에 남긴다. 그래야 형광펜 → 밑줄을 연달아 눌러 겹쳐 칠할 수 있다.
- */
-internal fun wrapSelection(v: TextFieldValue, mark: String): TextFieldValue {
-    val s = v.selection.min
-    val e = v.selection.max
-    val inner = v.text.substring(s, e)
-    val caret = s + mark.length
-    return TextFieldValue(
-        text = v.text.substring(0, s) + mark + inner + mark + v.text.substring(e),
-        selection = TextRange(caret, caret + inner.length)
-    )
-}
-
-@Composable
-private fun MarkButton(
-    label: String,
-    bg: Color,
-    fg: Color,
-    enabled: Boolean,
-    underline: Boolean = false,
-    onClick: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = if (enabled) bg else bg.copy(alpha = 0.45f),
-        border = BorderStroke(1.dp, AppColors.Divider),
-        modifier = Modifier.clickable(enabled = enabled, onClick = onClick)
-    ) {
-        Text(
-            label,
-            fontSize = 12.5.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (enabled) fg else fg.copy(alpha = 0.45f),
-            textDecoration = if (underline) TextDecoration.Underline else null,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-        )
-    }
-}
