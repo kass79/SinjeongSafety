@@ -44,12 +44,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import android.widget.MediaController
 import android.widget.VideoView
-import androidx.compose.foundation.text.ClickableText
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight as FW
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -1172,45 +1166,5 @@ private fun LinkPreviewCard(link: LinkAttachment) {
     }
 }
 
-
-// ── 본문 내 URL 자동 링크 (탭하면 열림) ────────────────────────
-@Composable
-private fun LinkifiedText(text: String) {
-    val context = LocalContext.current
-    val urlRegex = Regex("""https?://[^\s]+""")
-    val matches = urlRegex.findAll(text).toList()
-
-    if (matches.isEmpty()) {
-        Text(text, fontSize = 16.sp, lineHeight = 28.sp, color = AppColors.TextPrimary)
-        return
-    }
-
-    val annotated = buildAnnotatedString {
-        var last = 0
-        for (m in matches) {
-            append(text.substring(last, m.range.first))
-            pushStringAnnotation(tag = "URL", annotation = m.value)
-            withStyle(SpanStyle(color = AppColors.Primary, fontWeight = FW.SemiBold,
-                textDecoration = TextDecoration.Underline)) {
-                append(m.value)
-            }
-            pop()
-            last = m.range.last + 1
-        }
-        if (last < text.length) append(text.substring(last))
-    }
-
-    ClickableText(
-        text = annotated,
-        style = androidx.compose.ui.text.TextStyle(
-            fontSize = 16.sp, lineHeight = 28.sp, color = AppColors.TextPrimary
-        ),
-        onClick = { offset ->
-            annotated.getStringAnnotations("URL", offset, offset).firstOrNull()?.let { ann ->
-                runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ann.item)))
-                }
-            }
-        }
-    )
-}
+// ── 본문 렌더러(URL 링크 + 형광펜 + 밑줄)는 RichText.kt 로 옮겼다.
+// 피드 카드·AI 답변 패널이 같은 강조를 써야 해서 화면 밖 공용으로 뺐다(같은 패키지라 import 불필요).

@@ -68,6 +68,13 @@ object AppColors {
     val CatGreen: Color get() = if (isDark) Color(0xFF6FC97C) else Color(0xFF388E3C)
     val CatYellow: Color get() = if (isDark) Color(0xFFFFCF4D) else Color(0xFFF9A825)
 
+    // 본문 강조(형광펜) — 라이트는 진짜 형광펜 노랑 그대로.
+    // 다크에서 같은 노랑을 쓰면 어두운 화면에서 발광하듯 튀어 눈이 아프고, 밝은 본문 글자(TextPrimary)와
+    // 대비가 무너져 오히려 안 읽힌다. 그래서 태그 칩과 같은 방식으로 뒤집는다 — 배경은 짙은 호박색,
+    // 글자는 밝은 호박색. 계열(노랑)은 유지되므로 라이트/다크가 같은 '형광펜'으로 읽힌다.
+    val HighlightBg: Color get() = if (isDark) Color(0xFF5A4512) else Color(0xFFFFF176)
+    val HighlightFg: Color get() = if (isDark) Color(0xFFFFD75E) else Color(0xFF1A1C2E)
+
     val NewBadge: Color get() = if (isDark) Color(0xFFFF8A80) else Color(0xFFE53935)
     val OnlineGreen: Color get() = if (isDark) Color(0xFF4ADE80) else Color(0xFF34C759)
 }

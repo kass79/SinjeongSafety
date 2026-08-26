@@ -179,9 +179,9 @@ private fun AiSection(vm: MainViewModel, result: ChatItem.Result) {
                             .padding(horizontal = 6.dp, vertical = 2.dp))
                 }
                 Spacer(Modifier.height(7.dp))
-                // 마크다운은 그리지 않는다 — 굵게용 ** 만 걷어내고 그대로 읽힌다
-                Text(text.replace("**", ""), fontSize = 13.5.sp,
-                    color = AppColors.TextPrimary, lineHeight = 22.sp)
+                // 예전엔 ** 를 걷어내 버렸다. 이제 상세·피드와 같은 렌더러로 형광펜을 칠한다
+                // (결론과 조치 순서의 핵심 어구 — 프롬프트가 2~3곳으로 상한을 걸어 둔다).
+                LinkifiedText(text, fontSize = 13.5.sp, lineHeight = 22.sp)
                 Spacer(Modifier.height(9.dp))
                 Text("AI가 만든 초안입니다. 반드시 원문 조문으로 확인하세요.",
                     fontSize = 10.5.sp, color = AppColors.TextHint, lineHeight = 16.sp)

@@ -804,15 +804,16 @@ fun PostCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            // ── 본문: 상세와 같은 평문(상세도 마크다운을 쓰지 않고 URL 만 링크로 만든다).
-            // 피드에서는 링크를 눌리게 하지 않는다 — 카드 탭(상세 열기)과 싸운다.
+            // ── 본문: 상세와 같은 강조(형광펜 **…** / 밑줄 __…__)를 쓴다. 표기가 없으면 평문 그대로다.
+            // 다만 링크는 칠하지 않는다(links=false) — 피드에서 링크를 눌리게 하면 카드 탭(상세 열기)과 싸운다.
+            // AnnotatedString 으로 바뀌어도 아래 hasVisualOverflow 판정은 Text 의 같은 오버로드라 그대로 동작한다.
             if (post.content.isNotBlank()) {
                 Spacer(Modifier.height(6.dp))
                 // 접었을 때 실제로 넘쳤는지는 그려 봐야 안다. 펼친 뒤에는 넘침이 사라지므로
                 // 그때 덮어쓰지 않아야 '접기'가 남는다. 글이 바뀌면(재활용) 다시 판정한다.
                 var overflowed by remember(post.id) { mutableStateOf(false) }
                 Text(
-                    post.content,
+                    rememberRichText(post.content, links = false),
                     fontSize = 14.sp,
                     lineHeight = 21.sp,
                     color = AppColors.TextPrimary,
