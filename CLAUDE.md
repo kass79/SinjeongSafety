@@ -51,6 +51,14 @@ anthropic-skills:sinjeong-safety-app 스킬에는 "사용자가 GitHub 웹에서
 - 스킬의 절대 규칙은 그대로 유효: 패키지 `com.sinjeong.safety` 고정 / Firebase는 `sinjeongsafety`만
   (`sinjeong-safety`는 미사용 중복) / versionCode는 실제 값 확인 후 +1 / 서명 키 재생성 금지 /
   또타 마스코트 신규 생성 금지 / 전달 전 import 감사.
+- **Play 정책 필수 (지우면 심사 반려)**: 설정 → 앱 정보의 "개인정보처리방침"·"계정 삭제 요청" 링크(v1.16.2)와
+  `docs/privacy.html`·`docs/delete-account.html`(GitHub Pages). 파일명 바꾸지 말 것. 앱이 모으는 데이터가
+  바뀌면(새 권한·새 저장 필드·새 외부 API) privacy.html과 Play Console 데이터 보안 양식을 같이 고친다.
+- **계정 삭제 요청 처리 (페이지가 "10일 이내 삭제"를 약속함)**: 사번 N 기준, Firebase 콘솔(소유자라 규칙 무관)에서
+  ① Authentication의 `N@sinjeong.app` ② `crew/N` ③ 모든 `posts/*/confirms/N` ④ `comments`·`answers` 중 authorEmpNo==N
+  ⑤ `questions` 중 authorEmpNo==N — **지우기 전에** `images[].url`의 사진을 Storage에서 삭제(URL의 `/o/` 뒤를
+  URL 디코드한 게 경로, 예 `attachments/…`). 앱의 질문 삭제는 사진 파일을 지우지 않는다 ⑥ `config/rosterNames`의 `names.N`
+  ⑦ 처리 결과를 요청 메일에 회신.
 
 ## 아키텍처 요점
 

@@ -33,7 +33,9 @@ import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.PersonRemove
 import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -53,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -548,6 +551,15 @@ fun SettingsScreen(
                             color = AppColors.Primary
                         )
                     }
+
+                    // Play 정책 필수: 앱 안에 개인정보처리방침 링크와 계정 삭제 요청 경로가 있어야 한다.
+                    // 지우면 스토어 심사에서 반려된다. 페이지는 저장소 docs/ (GitHub Pages).
+                    LinkRow(Icons.Outlined.PrivacyTip, "개인정보처리방침", "수집 항목과 이용 목적 보기") {
+                        openWeb(context, PRIVACY_URL)
+                    }
+                    LinkRow(Icons.Outlined.PersonRemove, "계정 삭제 요청", "계정과 데이터 삭제 방법 안내") {
+                        openWeb(context, DELETE_ACCOUNT_URL)
+                    }
                 }
 
                 Spacer(Modifier.height(28.dp))
@@ -646,5 +658,32 @@ private fun openPlayStore(context: Context) {
     )
     if (runCatching { context.startActivity(market) }.isFailure) {
         runCatching { context.startActivity(web) }
+    }
+}
+
+private const val PRIVACY_URL = "https://kass79.github.io/SinjeongSafety/privacy.html"
+private const val DELETE_ACCOUNT_URL = "https://kass79.github.io/SinjeongSafety/delete-account.html"
+
+/** 브라우저로 웹 페이지 열기 (브라우저가 없으면 조용히 넘어간다) */
+private fun openWeb(context: Context, url: String) {
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+}
+
+/** 앱 정보 카드의 링크 한 줄 (아이콘 · 제목 · 설명) */
+@Composable
+private fun LinkRow(icon: ImageVector, title: String, desc: String, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = AppColors.Primary, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = AppColors.TextPrimary)
+            Text(desc, fontSize = 12.5.sp, color = AppColors.TextSecondary)
+        }
     }
 }
