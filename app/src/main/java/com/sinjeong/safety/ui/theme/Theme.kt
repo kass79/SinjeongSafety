@@ -70,6 +70,47 @@ object AppColors {
 
     val NewBadge: Color get() = if (isDark) Color(0xFFFF8A80) else Color(0xFFE53935)
     val OnlineGreen: Color get() = if (isDark) Color(0xFF4ADE80) else Color(0xFF34C759)
+
+    // ── AI 답변 화면 파스텔 (v1.17.0) ───────────────────────────
+    // "색이 너무 진하다"는 피드백으로 한 단계 더 연하게 잡았다.
+    // 규칙: 배경만 아주 연한 색, **글씨는 본문색(TextPrimary)** 을 그대로 쓰고
+    // 작은 라벨·아이콘·숫자에만 채도 낮은 포인트색을 쓴다. 테두리는 두지 않는다.
+    val AnsConclusionBg: Color get() = if (isDark) Color(0xFF1B2535) else Color(0xFFF1F6FE)
+    val AnsConclusionLabel: Color get() = if (isDark) Color(0xFF8FB4F0) else Color(0xFF4A7BD0)
+    val AnsStepNumBg: Color get() = if (isDark) Color(0xFF332C1A) else Color(0xFFFFF4DB)
+    val AnsStepNumFg: Color get() = if (isDark) Color(0xFFE5C37A) else Color(0xFFB7791F)
+    val AnsCautionBg: Color get() = if (isDark) Color(0xFF2E1F26) else Color(0xFFFFF3F6)
+    val AnsCautionLabel: Color get() = if (isDark) Color(0xFFF09AB5) else Color(0xFFD6587E)
+
+    // 인용문 안 형광 (글씨는 본문색 그대로 — 배경만 얹는다)
+    val HlActionBg: Color get() = if (isDark) Color(0xFF4A4020) else Color(0xFFFFF1C9)
+    val HlContactBg: Color get() = if (isDark) Color(0xFF24364F) else Color(0xFFDCEBFF)
+    val HlCautionBg: Color get() = if (isDark) Color(0xFF4A2633) else Color(0xFFFFE1EA)
+
+    val VerifiedBg: Color get() = if (isDark) Color(0xFF17302A) else Color(0xFFE8F7F0)
+    val VerifiedFg: Color get() = if (isDark) Color(0xFF7FD3B3) else Color(0xFF2F9E75)
+    val DraftBg: Color get() = if (isDark) Color(0xFF2A2D33) else Color(0xFFF2F3F5)
+    val DraftFg: Color get() = if (isDark) Color(0xFF9AA0AA) else Color(0xFF8A8F98)
+
+    /** 매뉴얼(비상조치) 배지 */
+    val ManualBadgeBg: Color get() = if (isDark) Color(0xFF17302A) else Color(0xFFE6F6F1)
+    val ManualBadgeFg: Color get() = if (isDark) Color(0xFF7FD3B3) else Color(0xFF2B8A6E)
+
+    /** 상황 바로가기 카드 */
+    val SituationBg: Color get() = if (isDark) Color(0xFF2B2320) else Color(0xFFFFF6F1)
+    val SituationNum: Color get() = if (isDark) Color(0xFFF0B08F) else Color(0xFFE0895B)
+
+    /**
+     * 오늘의 비상조치 카드 — 상황 바로가기와 같은 연한 코랄 계열.
+     * 오늘의 규정(연보라)과 나란히 넘겨 보는 카드라 채도를 같은 단계로 맞췄다.
+     * 글씨는 본문색을 그대로 쓰고, 포인트색은 알약·작은 라벨에만 쓴다.
+     */
+    val TodayManualBgA: Color get() = if (isDark) Color(0xFF2B2320) else Color(0xFFFFF3EC)
+    val TodayManualBgB: Color get() = if (isDark) Color(0xFF2A2026) else Color(0xFFFFEFF0)
+    val TodayManualPillBg: Color get() = if (isDark) Color(0xFF3A2C28) else Color(0xFFFFFFFF)
+    val TodayManualPillFg: Color get() = if (isDark) Color(0xFFF0B08F) else Color(0xFFD9694A)
+    /** 카드 안쪽 상자(쉽게 풀면) — 배경 위에 반투명으로 얹는다 */
+    val TodayManualInner: Color get() = if (isDark) Color(0x66181A22) else Color(0x8CFFFFFF)
 }
 
 private val AppTypography = Typography(

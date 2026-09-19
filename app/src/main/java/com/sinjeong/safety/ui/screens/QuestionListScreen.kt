@@ -172,7 +172,7 @@ private fun IntroCard() {
                 lineHeight = 18.sp
             )
             Text(
-                "규정 조문을 찾는 거라면 운전규정 → 물어보기가 빠릅니다.",
+                "규정 조문이나 비상조치를 찾는 거라면 운전규정/비상조치 → 물어보기가 빠릅니다.",
                 fontSize = 12.5.sp,
                 color = AppColors.TextSecondary,
                 lineHeight = 18.sp

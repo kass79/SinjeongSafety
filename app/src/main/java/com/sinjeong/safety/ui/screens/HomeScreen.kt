@@ -640,7 +640,8 @@ private fun CategoryRow(
     val cats = listOf(
         CategoryUi(Categories.HUMAN_ERROR, "인적오류", Icons.Default.Warning, Color(0xFFF57C00)),
         CategoryUi(Categories.EDU_VIDEO, "교육영상", Icons.Default.PlayCircle, Color(0xFF1976D2)),
-        CategoryUi(Categories.REGULATION, "운전규정", Icons.Default.MenuBook, Color(0xFF388E3C)),
+        CategoryUi(Categories.REGULATION, Categories.label(Categories.REGULATION),
+            Icons.Default.MenuBook, Color(0xFF388E3C)),
         CategoryUi(Categories.NOTICE, "전달사항", Icons.Default.Campaign, Color(0xFFC79A00)),
         CategoryUi(QNA_TILE, "질의응답", Icons.Default.Forum, Color(0xFF7B1FA2))
     )
@@ -713,7 +714,10 @@ private fun CategoryRow(
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSelected) cat.color else AppColors.TextPrimary,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        maxLines = 1
+                        // "운전규정/비상조치"는 한 칸(약 55dp)에 한 줄로 안 들어간다.
+                        // 글자를 더 줄이면 못 읽으므로 두 줄까지 허용한다 — 다섯 칸이
+                        // IntrinsicSize.Min 으로 높이를 맞추므로 줄만 하나 더 생긴다.
+                        maxLines = 2
                     )
                 }
             }
@@ -877,7 +881,7 @@ fun PostCard(
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "${post.category} · ${post.authorName} · 조회 ${post.views}",
+                    "${Categories.label(post.category)} · ${post.authorName} · 조회 ${post.views}",
                     fontSize = 12.sp,
                     color = AppColors.TextSecondary
                 )

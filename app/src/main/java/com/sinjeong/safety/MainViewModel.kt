@@ -22,6 +22,9 @@ import com.sinjeong.safety.data.Answer
 import com.sinjeong.safety.data.Briefing
 import com.sinjeong.safety.data.BriefingRepository
 import com.sinjeong.safety.data.CrewRepository
+import com.sinjeong.safety.data.GuideAnswer
+import com.sinjeong.safety.data.GuideSource
+import com.sinjeong.safety.data.ManualRepository
 import com.sinjeong.safety.data.Question
 import com.sinjeong.safety.data.QuestionRepository
 import com.sinjeong.safety.data.PostRepository
@@ -268,6 +271,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _requireLogin.value = crewRepo.requireLogin()
         }
         if (crewRepo.isCrewLoggedIn()) syncFavorites()
+        // 매뉴얼은 로그인한 기기에서만 받는다. 새 판이 올라왔으면 여기서 조용히 갈아끼운다.
+        syncManual()
         // 이미 승무원으로 로그인한 채 이 버전을 받은 기기: 지금 사번을 남겨 둔다.
         // 남기지 않으면 나중에 관리자 모드로 바꾼 뒤 앱을 다시 켤 때 사번을 잃는다.
         _verifiedEmpNo.value?.let { prefs.edit().putString("crew_emp_no", it).apply() }
@@ -379,6 +384,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _isAdmin.value = repo.adminEmail() == CrewRepository.ADMIN_EMAIL
                 if (!_isAdmin.value) {
                     repo.logout()
+                    // 여기도 세션이 사라지는 자리다 (관리자 폼에 다른 계정을 넣은 경우)
+                    wipeManual()
                     _message.value = UiMessage("관리자 계정이 아닙니다", true)
                     return@launch
                 }
@@ -397,6 +404,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // 다만 crew_verified_once 는 남겨 둔다 — 승무원이 나가겠다고 한 적이 없으므로
         // 로그인 게이트로 튕기지 않고 홈 화면이 그대로 보여야 한다.
         _crewEmpNo.value = null
+        // 세션이 사라졌으니 실명이 든 매뉴얼도 남기지 않는다(다시 로그인하면 자동으로 받는다).
+        wipeManual()
         _message.value = UiMessage("관리자 모드를 종료했습니다. 확인·댓글을 쓰려면 다시 로그인하세요.")
     }
 
@@ -424,6 +433,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 prefs.edit().putString("crew_name", name.trim()).apply()
                 markCrewVerified(empNo.trim())
                 syncFavorites()
+                syncManual()
                 _message.value = UiMessage("${name.trim()} 님, 환영합니다")
                 onSuccess()
             } catch (e: FirebaseAuthUserCollisionException) {
@@ -446,6 +456,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // 신입사원(extraIds 에만 있는 사람)이 통째로 갇힌다. 그래서 조회 실패(null)는 통과시킨다.
                 if (crewRepo.removedIds()?.contains(empNo.trim()) == true) {
                     crewRepo.signOut()
+                    wipeManual()
                     _message.value = UiMessage("퇴직 처리된 사번입니다. 관리자에게 문의하세요", true)
                     return@launch
                 }
@@ -458,6 +469,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 markCrewVerified(empNo.trim())
                 syncFavorites()
+                syncManual()
                 onSuccess()
             } catch (e: com.google.firebase.auth.FirebaseAuthInvalidUserException) {
                 // 그 사번으로 만든 계정이 아예 없다
@@ -481,6 +493,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // 사번도 함께 지운다 — 폰을 넘겨받은 사람에게 개발자 메뉴가 따라가면 안 된다.
         _crewVerifiedOnce.value = false
         _verifiedEmpNo.value = null
+        wipeManual()
         prefs.edit()
             .putBoolean("crew_verified_once", false)
             .remove("crew_emp_no")
@@ -740,13 +753,59 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { questionRepo.incrementViews(id) }
     }
 
-    // ── 규정 AI 답변 ────────────────────────────────────────────
+    // ── 규정·비상조치 AI 답변 ───────────────────────────────────
     // 실제 호출은 서버(Cloud Functions)가 한다 — 앱에는 API 키가 없다.
-    private val _aiAnswer = MutableStateFlow<String?>(null)
-    val aiAnswer: StateFlow<String?> = _aiAnswer.asStateFlow()
+    private val _guide = MutableStateFlow<GuideAnswer?>(null)
+    val guide: StateFlow<GuideAnswer?> = _guide.asStateFlow()
+    /** 이번 답의 근거로 실제로 보낸 자료. 인용문 대조·썸네일을 여기에 맞춘다. */
+    private val _guideSources = MutableStateFlow<List<GuideSource>>(emptyList())
+    val guideSources: StateFlow<List<GuideSource>> = _guideSources.asStateFlow()
     private val _aiLoading = MutableStateFlow(false)
     val aiLoading: StateFlow<Boolean> = _aiLoading.asStateFlow()
-    fun clearAiAnswer() { _aiAnswer.value = null }
+    // 진행 중인 askGuide 한 건. 질문이나 범위가 바뀌면 끊어야 한다 —
+    // 안 끊으면 10초 뒤에 도착한 **앞 질문의 답**이 새 질문 결과 위에 붙는다.
+    private var guideJob: kotlinx.coroutines.Job? = null
+    fun clearAiAnswer() {
+        guideJob?.let {
+            it.cancel()
+            guideJob = null
+            _aiLoading.value = false
+        }
+        _guide.value = null
+        _guideSources.value = emptyList()
+    }
+
+    // ── 비상대응 현장조치 매뉴얼 (기기 저장본) ──────────────────
+    /** 기기에 매뉴얼이 있는가. 내려받기·삭제 뒤에 갱신한다. */
+    private val _manualReady = MutableStateFlow(ManualRepository.isDownloaded(appContext))
+    val manualReady: StateFlow<Boolean> = _manualReady.asStateFlow()
+
+    /**
+     * 필요하면 내려받는다. 앱 시작·로그인 직후 한 번, 매뉴얼 화면에 들어올 때 한 번 부른다
+     * (저장소가 잠금으로 겹침을 막으므로 두 번 불러도 한 번만 받는다).
+     */
+    fun syncManual(force: Boolean = false) {
+        viewModelScope.launch {
+            when (val r = ManualRepository.syncIfNeeded(appContext, force)) {
+                is ManualRepository.SyncResult.Updated -> {
+                    _manualReady.value = true
+                    _message.value = UiMessage("매뉴얼이 ${r.edition}판으로 업데이트되었습니다")
+                }
+                ManualRepository.SyncResult.Denied -> {
+                    _manualReady.value = false
+                    _message.value = UiMessage(ManualRepository.DENIED_MESSAGE, true)
+                }
+                // 실패는 조용히 — 터널에서 앱이 잔소리하면 안 된다. 화면이 "다시 받기"를 낸다.
+                else -> _manualReady.value = ManualRepository.isDownloaded(appContext)
+            }
+        }
+    }
+
+    /** 로그아웃·퇴직 차단 시. 실명이 든 자료를 세션 없는 기기에 남기지 않는다. */
+    private fun wipeManual() {
+        ManualRepository.wipe(appContext)
+        _manualReady.value = false
+    }
 
     /** 로그인 여부. 서버가 어차피 거부하므로 헛되이 왕복하지 않고 앱에서 먼저 막는다. */
     private fun aiAllowed(): Boolean {
@@ -755,19 +814,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return false
     }
 
-    /** 검색 결과 상위 조문을 근거로 AI에게 답을 요청한다. 로그인 필수(서버가 거부한다). */
-    fun askRegulationAi(question: String, articles: List<Map<String, String>>) {
+    /**
+     * 검색 상위 자료를 근거로 AI에게 답을 요청한다. 로그인 필수(서버가 거부한다).
+     * 실패해도 화면의 검색 결과 카드는 그대로 남는다 — 통신이 안 되는 곳에서도
+     * 원문은 읽을 수 있어야 한다.
+     */
+    fun askGuide(question: String, mode: String, sources: List<GuideSource>) {
         if (!aiAllowed()) return
-        viewModelScope.launch {
-            _aiLoading.value = true
+        if (sources.isEmpty()) return
+        if (guideJob?.isActive == true) return   // 연타 — 같은 질문을 두 번 보내지 않는다
+        _aiLoading.value = true
+        _guideSources.value = sources
+        var job: kotlinx.coroutines.Job? = null
+        job = viewModelScope.launch {
             try {
-                _aiAnswer.value = aiRepo.askRegulation(question, articles)
+                _guide.value = aiRepo.askGuide(question, mode, sources)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e   // 질문이 바뀌어 끊은 것 — 실패 안내를 띄울 일이 아니다
             } catch (e: Exception) {
                 _message.value = UiMessage("AI 답변 실패: ${e.localizedMessage}", true)
             } finally {
-                _aiLoading.value = false
+                // 끊긴 뒤에 온 finally 가 **다음** 요청의 로딩 표시를 꺼 버리지 않게
+                if (guideJob === job) {
+                    guideJob = null
+                    _aiLoading.value = false
+                }
             }
         }
+        guideJob = job
     }
 
     /** 글 3줄 요약. 결과는 바로 본문에 넣지 않고 화면이 사람에게 먼저 보여 준다. */

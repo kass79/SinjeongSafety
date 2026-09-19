@@ -153,14 +153,24 @@ data class ConfirmReport(
 object Categories {
     const val HUMAN_ERROR = "인적오류 주의개소"
     const val EDU_VIDEO = "교육영상"
+    /**
+     * **이 값은 절대 바꾸지 말 것.** Firestore 에 이미 저장된 글의 category 값이고,
+     * 옛 버전 앱도 이 글자로 필터한다. 화면에 다르게 보이고 싶으면 [label] 을 쓴다.
+     */
     const val REGULATION = "운전규정"
     const val NOTICE = "전달사항"
     val ALL = listOf(HUMAN_ERROR, EDU_VIDEO, REGULATION, NOTICE)
 
+    /** 화면에 보여 줄 이름. 저장값과 표시명이 갈라지는 자리는 전부 여기를 거친다. */
+    fun label(category: String): String = when (category) {
+        REGULATION -> "운전규정/비상조치"
+        else -> category
+    }
+
     /** 카드/칩에 쓸 짧은 이름 */
     fun short(category: String): String = when (category) {
         HUMAN_ERROR -> "인적오류"
-        else -> category
+        else -> label(category)
     }
 }
 

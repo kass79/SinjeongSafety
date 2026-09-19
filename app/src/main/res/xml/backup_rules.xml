@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  안드로이드 11 이하(fullBackupContent)의 백업 제외 규칙.
+
+  비상대응 현장조치 매뉴얼(filesDir/manual)에는 직원 실명·연락처가 들어 있다.
+  구글 드라이브 백업으로 다른 기기에 복원되면 로그인하지 않은 기기에 실명이 남는다.
+  받아 둔 자료는 로그인하면 다시 받으므로 백업할 이유도 없다.
+  판 번호를 적어 둔 manual_prefs 도 같이 뺀다 — 파일 없이 번호만 복원되면
+  "이미 최신"으로 착각해 다시 받지 않는다.
+-->
+<full-backup-content>
+    <exclude domain="file" path="manual" />
+    <exclude domain="file" path="manual.tmp" />
+    <exclude domain="file" path="manual.old" />
+    <exclude domain="sharedpref" path="manual_prefs.xml" />
+</full-backup-content>

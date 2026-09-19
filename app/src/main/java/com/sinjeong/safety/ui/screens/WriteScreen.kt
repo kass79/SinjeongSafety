@@ -190,7 +190,9 @@ fun WriteScreen(
             SectionLabel("카테고리")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Categories.ALL.forEach { c ->
-                    SelectChip(text = c, selected = category == c, onClick = { category = c })
+                    // 저장되는 값(c)은 그대로 두고 보이는 글자만 표시명으로 바꾼다
+                    SelectChip(text = Categories.label(c), selected = category == c,
+                        onClick = { category = c })
                 }
             }
 

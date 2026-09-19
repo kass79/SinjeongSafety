@@ -14,8 +14,8 @@ android {
         applicationId = "com.sinjeong.safety"
         minSdk = 26
         targetSdk = 36
-        versionCode = 51
-        versionName = "1.16.2"
+        versionCode = 52
+        versionName = "1.17.0"
     }
 
     signingConfigs {
@@ -87,6 +87,14 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+
+    // 매뉴얼 변환 로직(HTML 이스케이프·PUA 치환·평문화·인용문 대조) 점검용.
+    // 테스트 전용이라 APK 에는 들어가지 않는다.
+    testImplementation("junit:junit:4.13.2")
+    // 단위 테스트의 android.jar 는 껍데기라 org.json 을 부르면 "not mocked" 로 죽는다.
+    // 진짜 구현을 테스트에만 얹어 ManualJson(파싱)까지 JVM 에서 돌린다 — 실제 매뉴얼
+    // 71개 섹션을 생성기에 통과시키는 스윕(ManualRealDataTest)이 이것에 기댄다.
+    testImplementation("org.json:json:20240303")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.compose.ui:ui-tooling-preview")

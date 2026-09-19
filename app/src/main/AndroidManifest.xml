@@ -18,8 +18,15 @@
         <package android:name="com.sinjeong.crewcalendar" />
     </queries>
 
+    <!--
+      백업은 그대로 켜 두되(설정·즐겨찾기는 옮겨 가는 게 좋다), 실명이 든
+      비상대응 매뉴얼 파일만 두 규칙 파일로 제외한다(v1.17.0).
+      안드로이드 12+ 는 dataExtractionRules, 11 이하는 fullBackupContent 를 본다 — 둘 다 필요하다.
+    -->
     <application
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@drawable/mascot_sign"
         android:roundIcon="@drawable/mascot_sign"
         android:label="@string/app_name"

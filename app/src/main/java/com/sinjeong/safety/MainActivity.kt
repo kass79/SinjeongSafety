@@ -33,7 +33,10 @@ import com.sinjeong.safety.ui.screens.CrewLoginScreen
 import com.sinjeong.safety.ui.screens.SettingsScreen
 import com.sinjeong.safety.ui.screens.DetailScreen
 import com.sinjeong.safety.ui.screens.HomeScreen
+import com.sinjeong.safety.ui.screens.AskMode
 import com.sinjeong.safety.ui.screens.LoginScreen
+import com.sinjeong.safety.ui.screens.ManualBrowseScreen
+import com.sinjeong.safety.ui.screens.ManualSectionScreen
 import com.sinjeong.safety.ui.screens.QuestionDetailScreen
 import com.sinjeong.safety.ui.screens.QuestionListScreen
 import com.sinjeong.safety.ui.screens.QuestionWriteScreen
@@ -51,7 +54,10 @@ object Routes {
     const val EDIT = "write/{postId}"         // 수정
     const val DETAIL = "detail/{postId}"
     const val REGULATION = "regulation"
-    const val REG_ASK = "reg_ask"             // 규정에 물어보기 (기기 안 검색)
+    // 물어보기 — mode 는 규정/비상조치/전체 (AskMode 의 값)
+    const val REG_ASK = "reg_ask/{mode}"
+    const val MANUAL = "manual"                       // 비상대응 매뉴얼 목록
+    const val MANUAL_SECTION = "manual/{sectionId}"   // 매뉴얼 섹션 보기(WebView)
     const val CONFIRMS = "confirms/{postId}"  // 확인 현황 (관리자)
     const val POINTS = "points"               // 직원 포인트 현황 (관리자)
     const val ROSTER = "roster"               // 직원 명단 관리 (관리자)
@@ -60,6 +66,8 @@ object Routes {
     const val QUESTION_DETAIL = "question/{questionId}"
     const val BRIEFING_WRITE = "briefing_write"      // 출무점호 올리기 (관리자)
     const val BRIEFINGS = "briefings"                // 지난 출무점호
+    fun regAsk(mode: String) = "reg_ask/$mode"
+    fun manualSection(id: String) = "manual/$id"
     fun question(id: String) = "question/$id"
     fun detail(id: String) = "detail/$id"
     fun edit(id: String) = "write/$id"
@@ -155,13 +163,37 @@ class MainActivity : ComponentActivity() {
 
                             composable(Routes.REGULATION) {
                                 RegulationScreen(
+                                    vm = vm,
                                     onBack = { nav.popBackStack() },
-                                    onAsk = { nav.navigate(Routes.REG_ASK) }
+                                    onAsk = { mode -> nav.navigate(Routes.regAsk(mode)) },
+                                    onOpenManual = { nav.navigate(Routes.MANUAL) },
+                                    // 오늘의 비상조치 → 그 섹션 원문
+                                    onOpenSection = { id -> nav.navigate(Routes.manualSection(id)) }
                                 )
                             }
 
-                            composable(Routes.REG_ASK) {
-                                RegulationAskScreen(vm = vm, onBack = { nav.popBackStack() })
+                            composable(Routes.REG_ASK) { backStackEntry ->
+                                RegulationAskScreen(
+                                    vm = vm,
+                                    initialMode = backStackEntry.arguments?.getString("mode")
+                                        ?: AskMode.REG,
+                                    onBack = { nav.popBackStack() },
+                                    onOpenSection = { id -> nav.navigate(Routes.manualSection(id)) }
+                                )
+                            }
+
+                            composable(Routes.MANUAL) {
+                                ManualBrowseScreen(
+                                    vm = vm,
+                                    onBack = { nav.popBackStack() },
+                                    onOpenSection = { id -> nav.navigate(Routes.manualSection(id)) }
+                                )
+                            }
+
+                            composable(Routes.MANUAL_SECTION) { backStackEntry ->
+                                val sid = backStackEntry.arguments?.getString("sectionId")
+                                    ?: return@composable
+                                ManualSectionScreen(sectionId = sid, onBack = { nav.popBackStack() })
                             }
 
                             composable(Routes.LOGIN) {

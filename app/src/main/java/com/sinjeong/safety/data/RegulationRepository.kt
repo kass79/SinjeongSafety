@@ -11,7 +11,13 @@ import java.util.Calendar
 data class RegArticle(
     val num: String,      // 제○조
     val title: String,    // 제목
-    val body: String      // 본문 전문
+    val body: String,     // 본문 전문
+    /**
+     * 비상대응 매뉴얼 섹션에서 온 항목이면 그 섹션 id("s003"), 규정 조문이면 빈 값.
+     * 검색 결과에서 원문 뷰어(WebView)로 되돌아가려면 안정적인 열쇠가 필요한데
+     * 매뉴얼은 [num] 이 비어 있는 섹션이 38개라 제목·번호로는 되짚을 수 없다.
+     */
+    val sid: String = ""
 )
 
 /** 규정집 하나 (예: 운전취급규정) */
@@ -133,22 +139,9 @@ object RegulationRepository {
         val pool = loadToday(context)
         if (pool.isEmpty()) return null
 
-        val start = Calendar.getInstance().apply {
-            set(2026, Calendar.JANUARY, 1, 0, 0, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        var count = 0
-        val cur = start.clone() as Calendar
-        val today = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        }
-        while (cur.before(today)) {
-            val d = cur.get(Calendar.DAY_OF_WEEK)
-            if (d != Calendar.SATURDAY && d != Calendar.SUNDAY) count++
-            cur.add(Calendar.DAY_OF_MONTH, 1)
-        }
-        return pool[count % pool.size]
+        // 2026-01-01 부터 어제까지의 평일 수로 순환한다.
+        // 셈법은 "오늘의 비상조치"와 함께 쓰려고 ManualToday 로 옮겼다(결과는 예전과 같다).
+        return pool[ManualToday.weekdayIndex(cal) % pool.size]
     }
 
     fun isWeekend(): Boolean {
