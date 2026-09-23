@@ -329,6 +329,9 @@ anthropic-skills:sinjeong-safety-app 스킬에는 "사용자가 GitHub 웹에서
   `index % items.size`. `RegulationRepository.todayRegulation` 도 이 함수를 쓴다.
   keySteps 는 "원문 그대로"라는 약속이라 기기의 섹션 평문과 대조해(askGuide 와 같은 정규화) 맞을 때만
   `✓ 원문 일치`, 아니면 회색 `원문 대조 안 됨` — today.json 과 manual.json 이 어긋나면 여기서 티가 난다.
+  **카드 헤드라인은 `ManualToday.cardTitle` 로 앞 번호·뒤 사고 코드 묶음을 뗀 것**(v1.17.1, 사용자 요청 "가독성") —
+  표시 전용이다. today.json·manual.json·뷰어 제목·AI 출처 라벨은 원문 그대로. 뗀 번호는 역할 옆 라벨에 "상황 25 · 기관사" 로 남긴다
+  (22·22-1, 23-1·23-2 는 코드를 떼면 제목이 같아진다). 코드 꼴이 새로 나오면 `ManualRealDataTest` 가 91개 제목으로 잡는다.
   번호 원+배지 컴포넌트는 답변 화면과 공용(`QuoteStep`). 높이가 다른 두 장이라 페이저 높이를
   **두 장의 제 높이 사이로 넘기는 위치만큼 보간**한다(`TodayPager` 의 layout 수정자 — 안 하면 넘길 때 아래가 덜컥 뛴다).
 - 순수 로직 점검: `app/src/test/.../ManualFormatTest.kt`·`ManualTodayTest.kt`·`ManualRealDataTest.kt`·`ManualTypoTest.kt`·`ManualV2Test.kt` (junit4, 42건).

@@ -244,6 +244,23 @@ class ManualRealDataTest {
     }
 
     @Test
+    fun `실제 매뉴얼 전 섹션 제목이 카드 헤드라인으로 깨끗이 줄어든다`() {
+        val doc = realDoc()
+        val todayFile = File(buildDir(), "today.json")
+        val titles = doc.sections.map { it.title } +
+            (if (todayFile.isFile) ManualJson.parseToday(todayFile.readText()).items.map { it.title } else emptyList())
+        val leftover = Regex("""[\[\]]|(?<![A-Za-z0-9])[A-Z]\d{2,3}(?!\d)|^\d+[.-]""")
+        var shortened = 0
+        for (t in titles) {
+            val c = ManualToday.cardTitle(ManualFormat.clean(t))
+            assertTrue("빈 헤드라인: $t", c.isNotBlank())
+            assertFalse("코드·번호가 남았다: $t → $c", leftover.containsMatchIn(c))
+            if (c != t.trim()) shortened++
+        }
+        println("카드 헤드라인: 제목 ${titles.size}개 전부 비지 않고 코드 없음 · 줄어든 것 $shortened 개")
+    }
+
+    @Test
     fun `실제 오늘의 비상조치가 실제 매뉴얼과 맞물린다`() {
         val doc = realDoc()
         val f = File(buildDir(), "today.json")

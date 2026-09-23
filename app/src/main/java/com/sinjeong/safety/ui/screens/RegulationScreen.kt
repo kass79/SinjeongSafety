@@ -484,14 +484,19 @@ private fun TodayManualCardView(card: TodayManualCard, onOpenSection: (String) -
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Pill("🚨 오늘의 비상조치", AppColors.TodayManualPillFg, AppColors.TodayManualPillBg)
-                if (item.role.isNotBlank()) {
+                // 헤드라인에서 뗀 번호는 여기 남긴다 — 22·22-1 처럼 코드를 떼면 제목이 같아지는 항목이 있다
+                val no = ManualToday.situationNo(item.title)
+                val label = listOf(if (no.isEmpty()) "" else "상황 $no", ManualFormat.clean(item.role).trim())
+                    .filter { it.isNotEmpty() }.joinToString(" · ")
+                if (label.isNotEmpty()) {
                     Spacer(Modifier.width(8.dp))
-                    Text(ManualFormat.clean(item.role), fontSize = 10.5.sp,
+                    Text(label, fontSize = 10.5.sp,
                         color = AppColors.TextHint, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             Spacer(Modifier.height(12.dp))
-            Text(ManualFormat.clean(item.title), fontSize = 15.5.sp,
+            // 헤드라인은 가독성 우선 — 앞 번호·뒤 사고 코드를 뗀다(원문 제목은 '원문 전체 보기' 화면에 그대로)
+            Text(ManualToday.cardTitle(ManualFormat.clean(item.title)), fontSize = 15.5.sp,
                 fontWeight = FontWeight.ExtraBold, color = AppColors.TextPrimary, lineHeight = 21.sp)
             if (item.hook.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))

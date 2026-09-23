@@ -79,6 +79,31 @@ object ManualToday {
     fun stepMatches(step: String, sectionPlain: String): Boolean =
         ManualFormat.quoteMatches(step, sectionPlain)
 
+    /** 제목 앞 번호 — "25. " · "9-1. " · "1.1 " · "2.1.1" */
+    private val LEAD_NO = Regex("""^\d+(?:[.-]\d+)*\.?\s*""")
+
+    /**
+     * 제목 뒤 사고 코드 묶음의 시작 — 첫 `[`, 또는 (괄호가 붙든 말든) 대문자 1자+숫자 3자리 코드
+     * (`N212(S152…)`, `시(P411/…)`, ` R113(S113…)`). `[111(S152…)]` 처럼 글자 없는 코드는 `[` 로 잡힌다.
+     * `(PSD)`·`(코로나19 등)`·`(폭음, 아크, 연기발생)` 같은 보통 괄호는 코드가 아니라 남는다.
+     */
+    private val CODE_TAIL = Regex("""\[|\(?\s*(?<![A-Za-z0-9])[A-Z]\d{3}(?!\d)""")
+
+    /**
+     * 카드 헤드라인용 제목 — 앞 번호와 뒤 코드 묶음을 뗀다(**표시 전용**, 자료·뷰어·AI 출처 라벨은 원문 그대로).
+     * "25. 지상, 교량구간 열차 강풍/태풍사고 N212(S152, S252)/N214(S154, S254)" → "지상, 교량구간 열차 강풍/태풍사고".
+     * 떼고 나서 비면 원래 제목을 쓴다.
+     */
+    fun cardTitle(title: String): String {
+        val t = LEAD_NO.replaceFirst(title.trim(), "")
+        val end = CODE_TAIL.find(t)?.range?.first ?: t.length
+        return t.substring(0, end).trim().ifEmpty { title.trim() }
+    }
+
+    /** 제목 앞 번호("25", "9-1"), 없으면 "". 헤드라인에서 뗀 번호를 작은 라벨에 "상황 25" 로 남긴다. */
+    fun situationNo(title: String): String =
+        LEAD_NO.find(title.trim())?.value?.trim()?.trimEnd('.') ?: ""
+
     /**
      * 오늘 보여 줄 카드. 아래 중 하나라도 걸리면 null(= 오늘의 규정 한 장만 보인다):
      * 주말 / 판 불일치 / 항목 없음 / 고른 항목의 섹션이 기기 매뉴얼에 없음.
