@@ -15,8 +15,15 @@ import com.sinjeong.safety.data.LinkAttachment
 import com.sinjeong.safety.data.Post
 import com.sinjeong.safety.data.QuizQuestion
 import com.sinjeong.safety.data.effectiveDate
+import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.FirebaseTooManyRequestsException
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import com.sinjeong.safety.data.AiRepository
 import com.sinjeong.safety.data.Answer
 import com.sinjeong.safety.data.Briefing
@@ -410,24 +417,55 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ── 승무원 로그인 ────────────────────────────────────────────
-    /** 등록 1단계: 명단 확인 후, 예전에 등록한 이름이 있으면 돌려준다. */
-    fun crewCheckEmpNo(empNo: String, onOk: (String?) -> Unit) {
+    // 실패 사유는 스낵바(_message)가 아니라 onError 로 **로그인 화면 안에** 돌려준다.
+    // Play 심사 반려(v1.16.2, 버전 코드 51)의 원인: 스낵바가 키보드 뒤에 가려져 심사자에게는
+    // "로그인 버튼을 눌러도 아무 반응이 없는" 것으로 보였다. 자세한 것은 CLAUDE.md 함정 참고.
+
+    /**
+     * 승무원 인증 실패를 쉬운 말로. 화면에 그대로 보이는 글이다.
+     * 알 수 없는 오류만 원문을 괄호로 덧붙인다(껍데기 google-services.json 의
+     * "API key not valid" 같은 설정 문제를 눈으로 잡아야 하므로).
+     */
+    private fun crewAuthError(e: Throwable, what: String): String = when (e) {
+        is TimeoutCancellationException ->
+            "서버 응답이 없습니다. 인터넷 연결을 확인하고 잠시 후 다시 시도해주세요"
+        is FirebaseNetworkException -> "인터넷 연결을 확인해주세요"
+        is FirebaseTooManyRequestsException -> "시도가 너무 많습니다. 잠시 후 다시 시도해주세요"
+        // 그 사번으로 만든 계정이 아예 없다
+        is FirebaseAuthInvalidUserException ->
+            "아직 등록하지 않은 사번입니다. 아래 '처음이신가요? 등록하기'를 눌러 PIN을 만들어주세요"
+        // PIN 불일치. 다만 이메일 열거 보호가 켜져 있으면 '계정 없음'도 여기로 온다.
+        is FirebaseAuthInvalidCredentialsException ->
+            "PIN이 맞지 않습니다. 등록한 적이 없다면 '처음이신가요? 등록하기'를 눌러주세요"
+        is FirebaseAuthUserCollisionException -> "이미 등록된 사번입니다. 로그인해주세요"
+        else -> "$what 잠시 후 다시 시도해주세요 (${e.localizedMessage ?: e.javaClass.simpleName})"
+    }
+
+    /**
+     * 등록 1단계: 명단 확인 후, 예전에 등록한 이름이 있으면 돌려준다.
+     * 명단은 (앱 기본 + config/roster.extraIds) − removedIds. Firestore 값을 기다리되 시간 제한을
+     * 두고, **못 읽었으면(null) 막지 않는다** — 터널에서 extraIds 에만 있는 신입이 갇히면 안 된다.
+     * 계정 생성은 어차피 서버가 하므로 오프라인이면 다음 단계에서 인터넷 안내가 뜬다.
+     */
+    fun crewCheckEmpNo(empNo: String, onOk: (String?) -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
-            if (!crewRepo.isInRoster(appContext, empNo)) {
-                _message.value = UiMessage("사업소 명단에 없는 사번입니다", true)
+            val no = empNo.trim()
+            val delta = withTimeoutOrNull(ROSTER_TIMEOUT_MS) { crewRepo.rosterDelta() }
+            if (delta != null && no !in (crewRepo.loadRoster(appContext) + delta.first) - delta.second) {
+                onError("사업소 명단에 없는 사번입니다. 전입·신규 발령이면 관리자에게 알려주세요")
                 return@launch
             }
             // 이미 등록된 사번인지는 계정 생성 단계에서 판정한다.
             // (계정 존재 여부를 미리 묻는 API는 사용하지 않는다)
-            onOk(crewRepo.savedName(empNo))
+            onOk(withTimeoutOrNull(ROSTER_TIMEOUT_MS) { crewRepo.savedName(no) })
         }
     }
 
     /** 등록 2단계: 계정 생성 */
-    fun crewRegister(empNo: String, name: String, pin: String, onSuccess: () -> Unit) {
+    fun crewRegister(empNo: String, name: String, pin: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
-                crewRepo.register(empNo, name, pin)
+                withTimeout(AUTH_TIMEOUT_MS) { crewRepo.register(empNo, name, pin) }
                 _crewEmpNo.value = empNo.trim()
                 _crewName.value = name.trim()
                 prefs.edit().putString("crew_name", name.trim()).apply()
@@ -436,33 +474,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 syncManual()
                 _message.value = UiMessage("${name.trim()} 님, 환영합니다")
                 onSuccess()
-            } catch (e: FirebaseAuthUserCollisionException) {
-                _message.value = UiMessage("이미 등록된 사번입니다. 로그인해주세요", true)
             } catch (e: Exception) {
-                _message.value = UiMessage("등록에 실패했습니다: ${e.localizedMessage}", true)
+                onError(crewAuthError(e, "등록에 실패했습니다."))
             }
         }
     }
 
     /** 로그인 */
-    fun crewSignIn(empNo: String, pin: String, onSuccess: () -> Unit) {
+    fun crewSignIn(empNo: String, pin: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
-                crewRepo.signIn(empNo, pin)
+                withTimeout(AUTH_TIMEOUT_MS) { crewRepo.signIn(empNo, pin) }
 
                 // 퇴직 처리된 사번은 로그인 직후 되돌린다.
                 // 판단 근거는 removedIds 에 **명시적으로 들어 있는지** 하나뿐이다.
                 // "명단에 없으면 차단"으로 만들면 안 된다 — 터널 등으로 config/roster 를 못 읽으면
-                // 신입사원(extraIds 에만 있는 사람)이 통째로 갇힌다. 그래서 조회 실패(null)는 통과시킨다.
-                if (crewRepo.removedIds()?.contains(empNo.trim()) == true) {
+                // 신입사원(extraIds 에만 있는 사람)이 통째로 갇힌다. 그래서 조회 실패·시간 초과(null)는 통과시킨다.
+                val removed = withTimeoutOrNull(ROSTER_TIMEOUT_MS) { crewRepo.removedIds() }
+                if (removed?.contains(empNo.trim()) == true) {
                     crewRepo.signOut()
                     wipeManual()
-                    _message.value = UiMessage("퇴직 처리된 사번입니다. 관리자에게 문의하세요", true)
+                    onError("퇴직 처리된 사번입니다. 관리자에게 문의하세요")
                     return@launch
                 }
 
                 _crewEmpNo.value = empNo.trim()
-                val n = crewRepo.savedName(empNo)
+                val n = withTimeoutOrNull(ROSTER_TIMEOUT_MS) { crewRepo.savedName(empNo) }
                 if (n != null) {
                     _crewName.value = n
                     prefs.edit().putString("crew_name", n).apply()
@@ -471,15 +508,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 syncFavorites()
                 syncManual()
                 onSuccess()
-            } catch (e: com.google.firebase.auth.FirebaseAuthInvalidUserException) {
-                // 그 사번으로 만든 계정이 아예 없다
-                _message.value = UiMessage("아직 등록하지 않은 사번입니다. 아래 '처음이신가요? 등록하기'를 눌러 PIN을 만들어주세요", true)
-            } catch (e: com.google.firebase.auth.FirebaseAuthInvalidCredentialsException) {
-                // PIN 불일치. 다만 이메일 열거 보호가 켜져 있으면 '계정 없음'도 여기로 온다.
-                _message.value = UiMessage("PIN이 맞지 않습니다. 등록한 적이 없다면 '처음이신가요? 등록하기'를 눌러주세요", true)
             } catch (e: Exception) {
-                // 설정 문제(로그인 제공업체 미사용 등)를 눈으로 보려면 원문이 필요하다
-                _message.value = UiMessage("로그인 실패: ${e.localizedMessage}", true)
+                onError(crewAuthError(e, "로그인에 실패했습니다."))
             }
         }
     }
@@ -925,6 +955,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         const val TOPIC_NEW_POSTS = "new_posts"
+        /** 승무원 인증(Firebase Auth) 한 번에 기다려 주는 시간. 넘으면 화면에 "서버 응답이 없습니다". */
+        const val AUTH_TIMEOUT_MS = 15_000L
+        /** 명단·이름 같은 부수 조회. 넘으면 null 로 보고 그냥 진행한다(막지 않는다). */
+        const val ROSTER_TIMEOUT_MS = 8_000L
     }
 
 }

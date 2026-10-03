@@ -50,18 +50,22 @@ class CrewRepository {
      */
     suspend fun effectiveRoster(context: Context): Set<String> {
         val base = loadRoster(context)
-
-        val doc = runCatching {
-            db.collection("config").document("roster").get().await()
-        }.getOrNull()
-
-        val extra = (doc?.get("extraIds") as? List<*>)
-            ?.mapNotNull { it?.toString()?.trim() }?.toSet() ?: emptySet()
-        val removed = (doc?.get("removedIds") as? List<*>)
-            ?.mapNotNull { it?.toString()?.trim() }?.toSet() ?: emptySet()
-
+        val (extra, removed) = rosterDelta() ?: return base
         return (base + extra) - removed
     }
+
+    /**
+     * config/roster 의 (extraIds, removedIds). **조회에 실패하면 null** — 부르는 쪽이
+     * "못 읽음"과 "비어 있음"을 구분해야 한다(오프라인에서 신입을 막지 않기 위해).
+     * 시간 제한은 두지 않는다 — 부르는 쪽이 withTimeoutOrNull 로 감싼다.
+     */
+    suspend fun rosterDelta(): Pair<Set<String>, Set<String>>? = runCatching {
+        val doc = rosterDoc.get().await()
+        idSet(doc.get("extraIds")) to idSet(doc.get("removedIds"))
+    }.getOrNull()
+
+    private fun idSet(v: Any?): Set<String> =
+        (v as? List<*>)?.mapNotNull { it?.toString()?.trim() }?.toSet() ?: emptySet()
 
     suspend fun isInRoster(context: Context, empNo: String): Boolean =
         effectiveRoster(context).contains(empNo.trim())
@@ -94,10 +98,7 @@ class CrewRepository {
      * 동작이 설계 원칙이라, config/roster 를 못 읽는 상황이 정상적으로 생긴다.
      * 그때 "명단에 없으면 차단"으로 만들면 extraIds 에만 있는 신입사원이 통째로 갇힌다.
      */
-    suspend fun removedIds(): Set<String>? = runCatching {
-        (rosterDoc.get().await().get("removedIds") as? List<*>)
-            ?.mapNotNull { it?.toString()?.trim() }?.toSet() ?: emptySet()
-    }.getOrNull()
+    suspend fun removedIds(): Set<String>? = rosterDelta()?.second
 
     /**
      * 신입사원 등록. 이미 명단에 있으면 아무것도 하지 않고 false 를 돌려준다.
@@ -168,7 +169,12 @@ class CrewRepository {
 
     fun isCrewLoggedIn(): Boolean = currentEmpNo() != null
 
-    /** 최초 등록: 계정 생성 후 crew 문서에 이름을 기록한다. */
+    /**
+     * 최초 등록: 계정 생성 후 crew 문서에 이름을 기록한다.
+     * Firestore 쓰기는 **기다리지 않는다** — 오프라인 쓰기는 실패하지 않고 서버에 닿을 때까지
+     * 매달리므로, await 하면 인증은 끝났는데 화면은 영원히 빙글빙글 도는 길이 생긴다.
+     * 큐에 들어간 쓰기는 Firestore 가 연결되면 알아서 보낸다.
+     */
     suspend fun register(empNo: String, name: String, pin: String) {
         val no = empNo.trim()
         auth.createUserWithEmailAndPassword(emailOf(no), pin).await()
@@ -179,19 +185,17 @@ class CrewRepository {
                 "createdAt" to FieldValue.serverTimestamp(),
                 "lastLoginAt" to FieldValue.serverTimestamp()
             )
-        ).await()
+        )
     }
 
-    /** 로그인. 이름이 이미 있으면 그대로 두고 접속 시각만 갱신한다. */
+    /** 로그인. 이름이 이미 있으면 그대로 두고 접속 시각만 갱신한다(쓰기는 기다리지 않음 — register 참고). */
     suspend fun signIn(empNo: String, pin: String) {
         val no = empNo.trim()
         auth.signInWithEmailAndPassword(emailOf(no), pin).await()
-        runCatching {
-            crewRef.document(no).set(
-                mapOf("lastLoginAt" to FieldValue.serverTimestamp()),
-                com.google.firebase.firestore.SetOptions.merge()
-            ).await()
-        }
+        crewRef.document(no).set(
+            mapOf("lastLoginAt" to FieldValue.serverTimestamp()),
+            SetOptions.merge()
+        )
     }
 
     /**

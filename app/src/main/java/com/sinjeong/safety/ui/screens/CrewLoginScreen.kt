@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -33,7 +34,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -60,6 +61,10 @@ private enum class CrewStep { LOGIN, REGISTER_ID, REGISTER_PIN, HELP }
 /**
  * 승무원 로그인 화면.
  * 등록은 최초 1회만 하고, 이후에는 로그인 상태가 유지되어 이 화면이 나타나지 않는다.
+ *
+ * 버튼을 누르면 **반드시 눈에 보이는 반응**이 있어야 한다(Play 심사 반려 v1.16.2 교훈):
+ * 누르는 즉시 버튼 안 진행 표시, 실패하면 버튼 아래 빨간 글로 이유. 스낵바에만 맡기면
+ * 키보드 뒤에 가려져 "눌러도 아무 일이 없다"로 보인다.
  */
 @Composable
 fun CrewLoginScreen(
@@ -73,9 +78,31 @@ fun CrewLoginScreen(
     var pin by remember { mutableStateOf("") }
     var pin2 by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
+    // 이 화면 안에 보여 줄 실패 사유. 단계가 바뀌면 지운다.
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(step) { error = null }
 
-    val message by vm.message.collectAsState()
-    LaunchedEffect(message) { if (message?.isError == true) loading = false }
+    /** 입력 검사 → 통과하면 진행 표시를 켜고 작업 시작. 두 번 눌러도 한 번만 간다. */
+    fun submit(check: () -> String?, work: () -> Unit) {
+        if (loading) return
+        error = check()
+        if (error != null) return
+        loading = true
+        work()
+    }
+    val fail: (String) -> Unit = { loading = false; error = it }
+
+    val doSignIn = {
+        submit(
+            check = {
+                when {
+                    empNo.length != 8 -> "사번 8자리를 입력해주세요"
+                    pin.length != 6 -> "PIN 6자리를 입력해주세요"
+                    else -> null
+                }
+            }
+        ) { vm.crewSignIn(empNo, pin, onSuccess = { loading = false; onSuccess() }, onError = fail) }
+    }
 
     // 키보드가 떴거나 세로가 짧은 화면이면 상단 히어로·여백을 걷어내 입력칸 자리를 확보한다
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
@@ -122,7 +149,10 @@ fun CrewLoginScreen(
                         singleLine = true,
                         label = { Text("사번 8자리") },
                         leadingIcon = { Icon(Icons.Default.Badge, null, tint = AppColors.Primary) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.NumberPassword,
+                            imeAction = ImeAction.Next
+                        ),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -134,19 +164,20 @@ fun CrewLoginScreen(
                         label = { Text("PIN 6자리") },
                         leadingIcon = { Icon(Icons.Default.Lock, null, tint = AppColors.Primary) },
                         visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.NumberPassword,
+                            imeAction = ImeAction.Done
+                        ),
+                        // 키보드 "완료"로도 로그인 — 버튼을 찾아 누르지 않아도 되게
+                        keyboardActions = KeyboardActions(onDone = { doSignIn() }),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(22.dp))
-                    PrimaryButton(
-                        text = "로그인",
-                        loading = loading,
-                        enabled = empNo.length == 8 && pin.length == 6 && !loading
-                    ) {
-                        loading = true
-                        vm.crewSignIn(empNo, pin) { loading = false; onSuccess() }
-                    }
+                    // 자릿수가 모자라도 누를 수 있게 둔다 — 누르면 무엇이 모자란지 바로 아래에 알려 준다.
+                    // (비활성 버튼은 "눌러도 반응이 없다"로 보인다)
+                    PrimaryButton(text = "로그인", loading = loading, enabled = !loading, onClick = doSignIn)
+                    ErrorText(error)
                     Spacer(Modifier.height(10.dp))
                     OutlineButton("처음이신가요? 등록하기") {
                         pin = ""; step = CrewStep.REGISTER_ID
@@ -196,18 +227,20 @@ fun CrewLoginScreen(
                             "전입·신규 발령으로 명단에 없으면 관리자에게 알려주세요."
                     )
                     Spacer(Modifier.height(18.dp))
-                    PrimaryButton(
-                        text = "다음",
-                        loading = loading,
-                        enabled = empNo.length == 8 && !loading
-                    ) {
-                        loading = true
-                        vm.crewCheckEmpNo(empNo) { savedName ->
-                            loading = false
-                            if (savedName != null) name = savedName
-                            step = CrewStep.REGISTER_PIN
+                    PrimaryButton(text = "다음", loading = loading, enabled = !loading) {
+                        submit(check = { if (empNo.length != 8) "사번 8자리를 입력해주세요" else null }) {
+                            vm.crewCheckEmpNo(
+                                empNo,
+                                onOk = { savedName ->
+                                    loading = false
+                                    if (savedName != null) name = savedName
+                                    step = CrewStep.REGISTER_PIN
+                                },
+                                onError = fail
+                            )
                         }
                     }
+                    ErrorText(error)
                     Spacer(Modifier.height(10.dp))
                     OutlineButton("뒤로") { step = CrewStep.LOGIN }
                 }
@@ -275,14 +308,25 @@ fun CrewLoginScreen(
                             "PIN은 암호화되어 저장되며 관리자도 볼 수 없습니다."
                     )
                     Spacer(Modifier.height(18.dp))
-                    PrimaryButton(
-                        text = "등록 완료",
-                        loading = loading,
-                        enabled = name.isNotBlank() && pin.length == 6 && pin == pin2 && !loading
-                    ) {
-                        loading = true
-                        vm.crewRegister(empNo, name, pin) { loading = false; onSuccess() }
+                    PrimaryButton(text = "등록 완료", loading = loading, enabled = !loading) {
+                        submit(
+                            check = {
+                                when {
+                                    name.isBlank() -> "이름을 입력해주세요"
+                                    pin.length != 6 -> "PIN 6자리를 입력해주세요"
+                                    pin != pin2 -> "PIN 확인이 서로 다릅니다"
+                                    else -> null
+                                }
+                            }
+                        ) {
+                            vm.crewRegister(
+                                empNo, name, pin,
+                                onSuccess = { loading = false; onSuccess() },
+                                onError = fail
+                            )
+                        }
                     }
+                    ErrorText(error)
                     Spacer(Modifier.height(10.dp))
                     OutlineButton("뒤로") { step = CrewStep.REGISTER_ID }
                 }
@@ -348,6 +392,22 @@ private fun PrimaryButton(
             Text(text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
+}
+
+/** 버튼 바로 아래 실패 사유. null 이면 자리도 차지하지 않는다. */
+@Composable
+private fun ErrorText(text: String?) {
+    if (text == null) return
+    Spacer(Modifier.height(10.dp))
+    Text(
+        text,
+        fontSize = 13.sp,
+        lineHeight = 19.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = AppColors.NewBadge,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 @Composable

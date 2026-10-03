@@ -138,6 +138,18 @@ anthropic-skills:sinjeong-safety-app 스킬에는 "사용자가 GitHub 웹에서
 
 ## 함정
 
+- **Play 심사 반려(2026-10, v1.16.2/51 "반응하지 않는 UI 요소") — 로그인 실패 안내가 키보드 뒤에 숨어 있었다.**
+  승무원 로그인 실패를 MainActivity 스낵바로만 보냈는데, M3 `Scaffold` 는 IME 인셋을 모르고 targetSdk 35+ 는
+  창이 키보드만큼 줄지 않으므로 스낵바가 **키보드 뒤에** 그려졌다. 심사자(PIN 칸 포커스 상태로 로그인 탭)에게는
+  "눌러도 아무 일이 없다"로 보였다(에뮬레이터에서 재현 — logcat 에는 로그인 시도가 찍히는데 화면은 그대로).
+  덤으로 둘: ① 같은 실패가 4초 안에 반복되면 `UiMessage`(data class)가 같은 값이라 StateFlow 가 안 흘러
+  화면 `loading` 이 영영 안 풀렸다 → 스낵바는 **보여 주기 전에** `consumeMessage()`. ② 로그인 게이트 상태에서는
+  NavHost 가 화면에 없어 "관리자" 가 `nav.navigate` 해도 백스택만 바뀌고 화면은 그대로였다 → 게이트 안에서 직접 바꿔 보여 준다.
+  교훈: **버튼은 누르면 반드시 그 화면 안에 보이는 반응이 있어야 한다**(즉시 진행 표시 + 버튼 아래 실패 사유).
+  스낵바에만 맡기지 말 것. `SnackbarHost` 에는 `Modifier.imePadding()`(v1.17.1). 인증은 `withTimeout(15초)`,
+  명단·이름 같은 부수 조회는 `withTimeoutOrNull(8초)` 로 null → 통과. 오프라인 Firestore **쓰기**는 실패하지 않고
+  매달리므로 로그인 뒤 `lastLoginAt` 같은 기록은 `await` 하지 않는다. 자릿수 모자람은 비활성 버튼이 아니라
+  누를 때 안내로(비활성 버튼도 심사자에게는 "무반응"이다). 심사 계정 99999999 는 assets 에 없고 `config/roster.extraIds` 에만 있다.
 - **로컬 빌드 APK를 사용자에게 주면 안 됩니다.** `app/google-services.json` 은 git에 없고(추적 안 됨)
   로컬 파일은 project_number·app_id가 전부 0, 키가 `AIzaSyDUMMYDUMMY` 인 **껍데기**입니다. 진짜는
   GitHub Secrets `GOOGLE_SERVICES_JSON` 에만 있고 CI가 빌드할 때 복원합니다. 껍데기로 빌드해도 앱은

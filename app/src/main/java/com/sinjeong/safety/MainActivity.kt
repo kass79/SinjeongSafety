@@ -8,9 +8,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessaging
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -18,7 +20,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
@@ -108,21 +112,40 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(message) {
                     message?.let {
-                        snackbarHost.showSnackbar(it.text)
+                        // 보여 주기 **전에** 비운다. UiMessage 는 data class 라 같은 글이 4초(스낵바가
+                        // 떠 있는 동안) 안에 다시 오면 StateFlow 가 같은 값으로 보고 흘려 주지 않았다 —
+                        // 두 번째 실패는 스낵바도 안 뜨고 화면의 loading 해제도 안 되는 길이었다.
                         vm.consumeMessage()
+                        snackbarHost.showSnackbar(it.text)
                     }
                 }
 
                 Scaffold(
-                    snackbarHost = { SnackbarHost(snackbarHost) }
+                    // M3 Scaffold 는 IME 인셋을 모른다. 없으면 스낵바가 키보드 **뒤**에 그려져
+                    // 입력 중인 사용자에게 안내가 전혀 보이지 않는다(Play 심사 반려 v1.16.2 원인).
+                    snackbarHost = { SnackbarHost(snackbarHost, Modifier.imePadding()) }
                 ) { padding ->
                     Box(Modifier.fillMaxSize().padding(padding)) {
                       if (needLogin) {
-                        CrewLoginScreen(
-                            vm = vm,
-                            onSuccess = { },
-                            onAdminClick = { nav.navigate(Routes.LOGIN) }
-                        )
+                        // 게이트 상태에서는 NavHost 가 화면에 없다. 여기서 nav.navigate(LOGIN) 을 하면
+                        // 백스택만 바뀌고 화면은 그대로여서 "관리자"가 눌러도 반응이 없었다.
+                        // 관리자 로그인은 게이트 안에서 직접 바꿔 보여 준다.
+                        var adminLogin by remember { mutableStateOf(false) }
+                        if (adminLogin) {
+                            BackHandler { adminLogin = false }
+                            LoginScreen(
+                                vm = vm,
+                                onBack = { adminLogin = false },
+                                // 성공하면 isAdmin 이 켜져 needLogin 이 꺼진다 — 홈이 바로 나온다
+                                onSuccess = { adminLogin = false }
+                            )
+                        } else {
+                            CrewLoginScreen(
+                                vm = vm,
+                                onSuccess = { },
+                                onAdminClick = { adminLogin = true }
+                            )
+                        }
                       } else {
                         NavHost(navController = nav, startDestination = Routes.HOME) {
 
